@@ -1,5 +1,13 @@
 # Environment Variables
 .env
+custom.env
+*.env
+!example.env
+
+# Generated compose files (created by docker compose ... config > ...)
+compose.custom.yaml
+compose.prod.yaml
+compose.*.generated.yaml
 
 # mounted volume
 sites
