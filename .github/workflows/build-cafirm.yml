@@ -1,0 +1,100 @@
+# Builds the CA Firm industry image (frappe-cafirm) and deploys to Hetzner via Dokploy.
+#
+# Triggers:
+#   - Push to svasamm/base branch when app list or Containerfile changes
+#   - Manual dispatch (workflow_dispatch) for on-demand builds
+#
+# Required GitHub Secrets (set in repo Settings → Secrets → Actions):
+#   DOCKERHUB_USERNAME        Docker Hub username/org (e.g. svasamm)
+#   DOCKERHUB_TOKEN           Docker Hub access token (read+write)
+#   CAFIRM_APPS_JSON_BASE64   base64 of apps/cafirm.json WITH actual repo credentials
+#                             Generate: base64 -w 0 apps/cafirm.json
+#                             (Use HTTPS+PAT URL for private repos in the local file,
+#                              never commit that version — only put it in this secret)
+#   DOKPLOY_CAFIRM_WEBHOOK    Dokploy deploy webhook URL for the cafirm bench
+#                             (optional — deploy step is skipped if not set)
+#
+# Adding a new industry image:
+#   Copy this file to build-{industry}.yml and update:
+#     - image_name input (e.g. frappe-retail)
+#     - paths trigger (e.g. apps/retail.json)
+#     - APPS_JSON_BASE64 secret (e.g. RETAIL_APPS_JSON_BASE64)
+#     - DOKPLOY_DEPLOY_WEBHOOK secret (e.g. DOKPLOY_RETAIL_WEBHOOK)
+
+name: Build cafirm image
+
+on:
+  push:
+    branches:
+      - svasamm/base
+    paths:
+      - apps/cafirm.json
+      - images/layered/Containerfile
+
+  workflow_dispatch:
+    inputs:
+      force_deploy:
+        description: "Trigger Dokploy redeploy after build"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+jobs:
+  build:
+    name: Build frappe-cafirm
+    uses: ./.github/workflows/build-custom-image.yml
+    with:
+      image_name: frappe-cafirm
+      frappe_branch: version-16
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      APPS_JSON_BASE64: ${{ secrets.CAFIRM_APPS_JSON_BASE64 }}
+
+  deploy:
+    name: Deploy to Hetzner (Dokploy)
+    needs: build
+    runs-on: ubuntu-latest
+    # Skip deploy on PRs or if webhook secret is not configured
+    if: |
+      github.event_name != 'pull_request' &&
+      vars.DOKPLOY_DEPLOY_ENABLED == 'true'
+    environment: production
+
+    steps:
+      - name: Trigger Dokploy redeploy
+        env:
+          WEBHOOK_URL: ${{ secrets.DOKPLOY_CAFIRM_WEBHOOK }}
+          IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+        run: |
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "DOKPLOY_CAFIRM_WEBHOOK not set — skipping deploy trigger."
+            echo "Set the secret in GitHub repo Settings → Secrets → Actions."
+            exit 0
+          fi
+
+          echo "Notifying Dokploy to redeploy cafirm bench..."
+          echo "Image: $IMAGE_TAG"
+
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json")
+
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "Dokploy deploy triggered successfully (HTTP $HTTP_STATUS)"
+          else
+            echo "Dokploy webhook returned HTTP $HTTP_STATUS — check the webhook URL."
+            exit 1
+          fi
+
+      - name: Deploy summary
+        if: always()
+        run: |
+          echo "### Deploy" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Image**: \`${{ needs.build.outputs.image_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Bench**: cafirm (Hetzner)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Dokploy**: triggered redeploy" >> "$GITHUB_STEP_SUMMARY"

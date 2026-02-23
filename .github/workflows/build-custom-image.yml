@@ -1,0 +1,98 @@
+# Reusable workflow: builds any Svasamm custom Frappe image and pushes to Docker Hub.
+# Each industry image (cafirm, retail, etc.) has its own caller workflow that passes
+# the correct app list (APPS_JSON_BASE64) and image name to this workflow.
+#
+# Caller pattern:
+#   uses: ./.github/workflows/build-custom-image.yml
+#   with:
+#     image_name: frappe-cafirm
+#     frappe_branch: version-16
+#   secrets:
+#     DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+#     DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+#     APPS_JSON_BASE64: ${{ secrets.CAFIRM_APPS_JSON_BASE64 }}
+
+name: Build Custom Frappe Image
+
+on:
+  workflow_call:
+    inputs:
+      image_name:
+        required: true
+        type: string
+        description: "Docker Hub image name without namespace (e.g. frappe-cafirm)"
+      frappe_branch:
+        required: false
+        type: string
+        default: "version-16"
+        description: "Frappe framework branch (must match apps branch)"
+    secrets:
+      DOCKERHUB_USERNAME:
+        required: true
+      DOCKERHUB_TOKEN:
+        required: true
+      APPS_JSON_BASE64:
+        required: true
+        description: "Base64-encoded apps.json with actual repo credentials (store as GitHub Secret)"
+    outputs:
+      image_tag:
+        description: "Full image reference with SHA tag pushed to Docker Hub"
+        value: ${{ jobs.build.outputs.image_tag }}
+
+jobs:
+  build:
+    name: Build & Push
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.set-tag.outputs.image_tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Short SHA for immutable pinned tags (e.g. version-16-abc1234)
+      - name: Set image tag
+        id: set-tag
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          IMAGE_FULL="${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.image_name }}"
+          echo "image_tag=${IMAGE_FULL}:${{ inputs.frappe_branch }}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "image_base=${IMAGE_FULL}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+      # images/layered/Containerfile is the upstream-maintained Containerfile for
+      # custom app images. It accepts APPS_JSON_BASE64 and installs all apps at build time.
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: images/layered/Containerfile
+          push: true
+          tags: |
+            ${{ steps.set-tag.outputs.image_base }}:${{ inputs.frappe_branch }}
+            ${{ steps.set-tag.outputs.image_base }}:${{ inputs.frappe_branch }}-${{ steps.set-tag.outputs.short_sha }}
+          build-args: |
+            FRAPPE_BRANCH=${{ inputs.frappe_branch }}
+            APPS_JSON_BASE64=${{ secrets.APPS_JSON_BASE64 }}
+          # Registry-based layer cache: dramatically reduces build time after the first run.
+          # The :buildcache tag is managed automatically by Buildx — do not use it as a release tag.
+          cache-from: type=registry,ref=${{ steps.set-tag.outputs.image_base }}:buildcache
+          cache-to: type=registry,ref=${{ steps.set-tag.outputs.image_base }}:buildcache,mode=max
+
+      - name: Build summary
+        run: |
+          echo "### Image pushed successfully" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Tag | Purpose |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-----|---------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| \`${{ steps.set-tag.outputs.image_base }}:${{ inputs.frappe_branch }}\` | Latest (mutable) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| \`${{ steps.set-tag.outputs.image_tag }}\` | Pinned to this commit (use in Dokploy) |" >> "$GITHUB_STEP_SUMMARY"
