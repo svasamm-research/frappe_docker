@@ -1,0 +1,90 @@
+# Manager Traefik routing — Option B (Central Traefik on Manager)
+# ================================================================
+# TEMPLATE — copy to ~/gitops/traefik-routes.yaml on the MANAGER VPS.
+# Fill in real domain names, Agent private IPs, and bench ports.
+#
+# This file is added to Dokploy's Traefik via:
+#   Dokploy UI → Settings → Traefik → Advanced Config → paste this YAML
+#
+# Traefik auto-reloads when the config changes — no container restart needed.
+#
+# --- WHEN TO UPDATE THIS FILE -----------------------------------------------
+# Adding a new site to an EXISTING bench:
+#   → Add the new domain to the existing router's Host() rule
+#
+# Adding a NEW bench to an EXISTING agent (new industry/client cluster):
+#   → Add a new router+service block with new BENCH_PORT (e.g., 8081)
+#   → BENCH_PORT must be unique per agent (same port OK on different agents)
+#
+# Adding a NEW agent:
+#   → Add new router+service blocks with new AGENT_PRIVATE_IP
+#   → Ensure the new agent's UFW allows traffic from 10.0.0.0/24
+# ---------------------------------------------------------------------------
+
+http:
+  routers:
+
+    # ── cafirm bench — Agent 1 (10.0.0.2:8080) ────────────────────────────
+    # HTTPS: terminates SSL here on Manager, then plain HTTP to Agent
+    cafirm-https:
+      rule: "Host(`firm1.yourdomain.com`) || Host(`firm2.yourdomain.com`)"
+      service: cafirm
+      entryPoints: [websecure]
+      tls:
+        certResolver: letsencrypt
+
+    # HTTP: redirect to HTTPS
+    cafirm-http:
+      rule: "Host(`firm1.yourdomain.com`) || Host(`firm2.yourdomain.com`)"
+      service: cafirm
+      entryPoints: [web]
+      middlewares: [redirect-https]
+
+    # ── (future) retail bench — Agent 1 (10.0.0.2:8081) ──────────────────
+    # retail-https:
+    #   rule: "Host(`shop1.yourdomain.com`) || Host(`shop2.yourdomain.com`)"
+    #   service: retail
+    #   entryPoints: [websecure]
+    #   tls:
+    #     certResolver: letsencrypt
+    # retail-http:
+    #   rule: "Host(`shop1.yourdomain.com`) || Host(`shop2.yourdomain.com`)"
+    #   service: retail
+    #   entryPoints: [web]
+    #   middlewares: [redirect-https]
+
+    # ── (future) cafirm bench — Agent 2 (10.0.0.3:8080) ──────────────────
+    # cafirm-agent2-https:
+    #   rule: "Host(`firm3.yourdomain.com`) || Host(`firm4.yourdomain.com`)"
+    #   service: cafirm-agent2
+    #   entryPoints: [websecure]
+    #   tls:
+    #     certResolver: letsencrypt
+    # cafirm-agent2-http:
+    #   rule: "Host(`firm3.yourdomain.com`) || Host(`firm4.yourdomain.com`)"
+    #   service: cafirm-agent2
+    #   entryPoints: [web]
+    #   middlewares: [redirect-https]
+
+  services:
+    # AGENT_PRIVATE_IP:BENCH_PORT → the port exposed by compose.agent.yaml
+    cafirm:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.0.2:8080"    # Agent1 private IP : BENCH_PORT
+
+    # retail:
+    #   loadBalancer:
+    #     servers:
+    #       - url: "http://10.0.0.2:8081"  # Agent1 : retail BENCH_PORT
+
+    # cafirm-agent2:
+    #   loadBalancer:
+    #     servers:
+    #       - url: "http://10.0.0.3:8080"  # Agent2 private IP : BENCH_PORT
+
+  middlewares:
+    redirect-https:
+      redirectScheme:
+        scheme: https
+        permanent: true

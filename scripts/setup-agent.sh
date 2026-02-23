@@ -52,18 +52,21 @@ info "System updated."
 # =============================================================================
 section "2/4 — Firewall (UFW)"
 
-# Agent is NOT a public-facing server. Only SSH needs to be open.
-# Traefik on the Manager routes client traffic to containers here
-# via Hetzner Private Network — no public ports needed for HTTP/S.
+# Agent is NOT publicly reachable (Option B: Central Traefik on Manager).
+# All HTTP/S traffic comes from Manager Traefik via Hetzner private network.
 #
-# Dokploy Manager needs SSH access (port 22) to deploy and manage containers.
+# Rules:
+#   22/tcp  — SSH from anywhere (admin + Dokploy manager remote deployments)
+#   10.0.0.0/24 — all traffic from private network allowed (Manager→Agent routing
+#                 on bench ports 8080+ and any internal Dokploy communication)
 ufw default deny incoming
 ufw default allow outgoing
-ufw allow 22/tcp comment 'SSH — for admin access and Dokploy manager deployments'
+ufw allow 22/tcp comment 'SSH — admin access and Dokploy manager deployments'
+ufw allow from 10.0.0.0/24 comment 'Hetzner private network — Manager Traefik routing and Dokploy'
 ufw --force enable
 
-info "UFW active. Only port 22 open."
-info "All HTTP/S traffic flows via Manager Traefik → Hetzner private network → here."
+info "UFW active. Open: port 22 (public) + all from 10.0.0.0/24 (private network)."
+info "Bench ports (8080, 8081, ...) are reachable from Manager only via private network."
 
 # =============================================================================
 # 3. Docker CE

@@ -1,0 +1,88 @@
+# overrides/compose.agent.yaml
+#
+# Option B (Central Traefik on Manager) — Agent-side bench configuration.
+#
+# Use this INSTEAD OF compose.dokploy.yaml when deploying benches on Agent VPSes.
+#
+# How Option B works:
+#   - Manager VPS: single public IP, Traefik handles all SSL + routing
+#   - Agent VPS:   no public HTTP/S; bench frontend exposed ONLY on private network
+#   - Manager Traefik reads ~/gitops/traefik-routes.yaml (file provider) to know
+#     which domains map to which Agent private IP + bench port
+#
+# Required env vars (add to cafirm.env):
+#   AGENT_PRIVATE_IP  — Agent's Hetzner private network IP (e.g., 10.0.0.2)
+#   BENCH_PORT        — Unique port for this bench on this agent (e.g., 8080)
+#                       Each bench on the SAME agent needs a different port.
+#                       Benches on DIFFERENT agents can share the same port.
+#   ROUTER            — Unique bench identifier; becomes the bench Docker network name
+#   DB_HOST           — mariadb-database
+#   DB_PASSWORD       — must match mariadb.env DB_PASSWORD
+#
+# Generate bench compose file (run on local machine):
+#   docker compose \
+#     --env-file /tmp/cafirm.env \
+#     -f compose.yaml \
+#     -f overrides/compose.redis.yaml \
+#     -f overrides/compose.agent.yaml \
+#     config > /tmp/cafirm.yaml
+#
+# Then update ~/gitops/traefik-routes.yaml on the Manager to add routing for
+# the new bench (SITES_RULE domains → AGENT_PRIVATE_IP:BENCH_PORT).
+
+services:
+  frontend:
+    # Expose bench ONLY on private network. Manager Traefik connects here.
+    # Format: AGENT_PRIVATE_IP:BENCH_PORT:CONTAINER_PORT
+    ports:
+      - "${AGENT_PRIVATE_IP}:${BENCH_PORT}:8080"
+    networks:
+      - bench-network
+
+  configurator:
+    networks:
+      - bench-network
+      - mariadb-network
+
+  backend:
+    networks:
+      - bench-network
+      - mariadb-network
+
+  websocket:
+    networks:
+      - bench-network
+      - mariadb-network
+
+  scheduler:
+    networks:
+      - bench-network
+      - mariadb-network
+
+  queue-short:
+    networks:
+      - bench-network
+      - mariadb-network
+
+  queue-long:
+    networks:
+      - bench-network
+      - mariadb-network
+
+  redis-cache:
+    networks:
+      - bench-network
+
+  redis-queue:
+    networks:
+      - bench-network
+
+networks:
+  # Shared MariaDB network — created once per agent in setup-agent.sh
+  mariadb-network:
+    name: mariadb-network
+    external: true
+  # Internal bench network — scoped to this bench only
+  bench-network:
+    name: ${ROUTER}
+    external: false
