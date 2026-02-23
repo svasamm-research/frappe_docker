@@ -1,0 +1,75 @@
+# Dokploy variant of compose.multi-bench.yaml
+#
+# Use this instead of compose.multi-bench.yaml when deploying on a server
+# managed by Dokploy. The only difference is the Traefik network name:
+#   upstream uses: traefik-public
+#   Dokploy creates: dokploy-network
+#
+# Usage (combine with compose.dokploy-ssl.yaml for HTTPS):
+#   docker compose \
+#     --env-file ~/gitops/cafirm.env \
+#     -f compose.yaml \
+#     -f overrides/compose.redis.yaml \
+#     -f overrides/compose.dokploy.yaml \
+#     -f overrides/compose.dokploy-ssl.yaml \
+#     config > ~/gitops/cafirm.yaml
+
+services:
+  frontend:
+    networks:
+      - dokploy-network
+      - bench-network
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      - traefik.http.services.${ROUTER?ROUTER not set}.loadbalancer.server.port=8080
+      - traefik.http.routers.${ROUTER}-http.service=${ROUTER}
+      - traefik.http.routers.${ROUTER}-http.entrypoints=http
+      - traefik.http.routers.${ROUTER}-http.rule=${SITES_RULE?SITES_RULE not set}
+  configurator:
+    networks:
+      - bench-network
+      - mariadb-network
+  backend:
+    networks:
+      - mariadb-network
+      - bench-network
+  websocket:
+    networks:
+      - bench-network
+      - mariadb-network
+  scheduler:
+    networks:
+      - bench-network
+      - mariadb-network
+  queue-short:
+    networks:
+      - bench-network
+      - mariadb-network
+  queue-long:
+    networks:
+      - bench-network
+      - mariadb-network
+  redis-cache:
+    networks:
+      - bench-network
+      - mariadb-network
+  redis-queue:
+    networks:
+      - bench-network
+      - mariadb-network
+
+networks:
+  # Dokploy creates and manages this network during installation.
+  # All services that need to be accessible via Traefik must join it.
+  dokploy-network:
+    name: dokploy-network
+    external: true
+  # Shared MariaDB network — created once per server in setup-hetzner.sh.
+  # All benches on this server connect to the same MariaDB instance.
+  mariadb-network:
+    name: mariadb-network
+    external: true
+  bench-network:
+    name: ${ROUTER}
+    external: false

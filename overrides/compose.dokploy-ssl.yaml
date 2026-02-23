@@ -1,0 +1,24 @@
+# Dokploy SSL variant of compose.multi-bench-ssl.yaml
+#
+# Adds HTTPS via Dokploy's built-in Traefik instance with Let's Encrypt.
+# Dokploy's cert resolver is named "letsencrypt" (upstream frappe_docker uses "le").
+#
+# Always combine with compose.dokploy.yaml — never use this file alone.
+#
+# Requires in env file:
+#   LETSENCRYPT_EMAIL=mithun@svasamm.com
+#   SITES_RULE=Host(`client.yourdomain.com`) || Host(`client2.yourdomain.com`)
+
+services:
+  frontend:
+    labels:
+      # Redirect all HTTP traffic to HTTPS
+      - traefik.http.routers.${ROUTER}-http.middlewares=https-redirect
+      # HTTPS router — routes based on SITES_RULE
+      - traefik.http.routers.${ROUTER}-https.rule=${SITES_RULE?SITES_RULE not set}
+      - traefik.http.routers.${ROUTER}-https.entrypoints=websecure
+      - traefik.http.routers.${ROUTER}-https.tls=true
+      - traefik.http.routers.${ROUTER}-https.service=${ROUTER}
+      # Dokploy's Traefik uses "letsencrypt" as the cert resolver name
+      # (upstream frappe_docker uses "le" — this is the only difference)
+      - traefik.http.routers.${ROUTER}-https.tls.certresolver=letsencrypt
