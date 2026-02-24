@@ -1,0 +1,86 @@
+# UAT build for frappe-cafirm image.
+#
+# TRIGGER: push to svasamm/base (infra changes) OR workflow_dispatch from cafirm_override.
+# Called automatically when cafirm_override or site_override pushes to develop branch.
+#
+# Flow:
+#   cafirm_override: push to develop
+#     → trigger-image-build.yml dispatches this workflow
+#       → builds frappe-cafirm:develop + :develop-{sha7} (apps pulled from develop branches)
+#         → deploys to UAT bench via Dokploy webhook
+#
+# Required GitHub Secrets:
+#   DOCKERHUB_USERNAME              Docker Hub username
+#   DOCKERHUB_TOKEN                 Docker Hub token (read+write)
+#   CAFIRM_UAT_APPS_JSON_BASE64     base64 of apps/cafirm-uat.json with HTTPS+PAT URLs
+#                                   (custom apps pointing to develop branch)
+#   DOKPLOY_CAFIRM_UAT_WEBHOOK      Dokploy deploy webhook for UAT bench
+#
+# Required GitHub Variables:
+#   DOKPLOY_DEPLOY_ENABLED          set to "true" to enable auto-deploy after build
+
+name: Build cafirm — UAT
+
+on:
+  # Infra changes on svasamm/base also rebuild the UAT image
+  push:
+    branches:
+      - svasamm/base
+    paths:
+      - apps/cafirm-uat.json
+      - images/layered/Containerfile
+
+  # Triggered by cafirm_override / site_override push to develop
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build frappe-cafirm (UAT)
+    uses: ./.github/workflows/build-custom-image.yml
+    with:
+      image_name: frappe-cafirm
+      frappe_branch: version-16
+      image_tag_prefix: develop
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN:    ${{ secrets.DOCKERHUB_TOKEN }}
+      APPS_JSON_BASE64:   ${{ secrets.CAFIRM_UAT_APPS_JSON_BASE64 }}
+
+  deploy:
+    name: Deploy to UAT bench
+    needs: build
+    runs-on: ubuntu-latest
+    if: vars.DOKPLOY_DEPLOY_ENABLED == 'true'
+    environment: uat
+
+    steps:
+      - name: Trigger Dokploy redeploy
+        env:
+          WEBHOOK_URL: ${{ secrets.DOKPLOY_CAFIRM_UAT_WEBHOOK }}
+          IMAGE_TAG:   ${{ needs.build.outputs.image_tag }}
+        run: |
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "DOKPLOY_CAFIRM_UAT_WEBHOOK not set — skipping deploy."
+            exit 0
+          fi
+
+          echo "Deploying to UAT bench..."
+          echo "Image: $IMAGE_TAG"
+
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "$WEBHOOK_URL" -H "Content-Type: application/json")
+
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "Deploy triggered (HTTP $HTTP_STATUS)"
+          else
+            echo "Webhook returned HTTP $HTTP_STATUS"
+            exit 1
+          fi
+
+      - name: Deploy summary
+        if: always()
+        run: |
+          echo "### UAT Deploy" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Image**: \`${{ needs.build.outputs.image_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Bench**: cafirm UAT (Hetzner)" >> "$GITHUB_STEP_SUMMARY"
