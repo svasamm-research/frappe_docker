@@ -31,40 +31,78 @@
 # the new bench (SITES_RULE domains → AGENT_PRIVATE_IP:BENCH_PORT).
 
 services:
+  # ── Configurator ────────────────────────────────────────────────────────────
+  # Runs once per deployment; all other services wait for it to complete.
+  # We extend the standard Frappe setup with automatic bench build so frontend
+  # assets are always fresh after a new image is deployed — no manual steps.
+  #
+  # Why bench build here and not in the backend container:
+  #   - configurator exits cleanly and all services wait for it (depends_on)
+  #   - bench build writes to sites/assets (shared named volume) so frontend
+  #     nginx sees the new files immediately when it starts
+  #   - running it once centrally avoids race conditions between workers
+  configurator:
+    command:
+      - >
+        ls -1 apps > sites/apps.txt;
+        bench set-config -g db_host $$DB_HOST;
+        bench set-config -gp db_port $$DB_PORT;
+        bench set-config -g redis_cache "redis://$$REDIS_CACHE";
+        bench set-config -g redis_queue "redis://$$REDIS_QUEUE";
+        bench set-config -g redis_socketio "redis://$$REDIS_QUEUE";
+        bench set-config -gp socketio_port $$SOCKETIO_PORT;
+        echo "[deploy] Running bench build --production ...";
+        bench build --production;
+        echo "[deploy] Assets ready.";
+    volumes:
+      - sites_assets:/home/frappe/frappe-bench/sites/assets
+    networks:
+      - bench-network
+      - mariadb-network
+
+  # ── Application services ─────────────────────────────────────────────────────
+  # All mount sites_assets so they share the same built frontend files.
   frontend:
     # Expose bench ONLY on private network. Manager Traefik connects here.
     # Format: AGENT_PRIVATE_IP:BENCH_PORT:CONTAINER_PORT
     ports:
       - "${AGENT_PRIVATE_IP}:${BENCH_PORT}:8080"
+    volumes:
+      - sites_assets:/home/frappe/frappe-bench/sites/assets
     networks:
       - bench-network
-
-  configurator:
-    networks:
-      - bench-network
-      - mariadb-network
 
   backend:
+    volumes:
+      - sites_assets:/home/frappe/frappe-bench/sites/assets
     networks:
       - bench-network
       - mariadb-network
 
   websocket:
+    volumes:
+      - sites_assets:/home/frappe/frappe-bench/sites/assets
     networks:
       - bench-network
       - mariadb-network
 
   scheduler:
+    volumes:
+      - sites_assets:/home/frappe/frappe-bench/sites/assets
     networks:
       - bench-network
       - mariadb-network
 
   queue-short:
+    volumes:
+      - sites_assets:/home/frappe/frappe-bench/sites/assets
     networks:
       - bench-network
       - mariadb-network
 
   queue-long:
+    volumes:
+      - sites_assets:/home/frappe/frappe-bench/sites/assets
     networks:
       - bench-network
       - mariadb-network
@@ -76,6 +114,16 @@ services:
   redis-queue:
     networks:
       - bench-network
+
+# ── Volumes ──────────────────────────────────────────────────────────────────
+volumes:
+  # Named shared volume for built frontend assets.
+  # Shared explicitly across all containers so bench build output is visible
+  # to the frontend nginx container immediately.
+  # The upstream Containerfile declares sites/assets as a VOLUME; by mounting
+  # a named volume here we override the per-container anonymous volume that
+  # Docker would otherwise create, which isolates assets between containers.
+  sites_assets:
 
 networks:
   # Shared MariaDB network — created once per agent in setup-agent.sh
