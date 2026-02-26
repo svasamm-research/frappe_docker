@@ -33,14 +33,18 @@
 services:
   # ── Configurator ────────────────────────────────────────────────────────────
   # Runs once per deployment; all other services wait for it to complete.
-  # We extend the standard Frappe setup with automatic bench build so frontend
-  # assets are always fresh after a new image is deployed — no manual steps.
   #
-  # Why bench build here and not in the backend container:
-  #   - configurator exits cleanly and all services wait for it (depends_on)
-  #   - bench build writes to sites/assets (shared named volume) so frontend
-  #     nginx sees the new files immediately when it starts
-  #   - running it once centrally avoids race conditions between workers
+  # Asset pipeline explanation:
+  #   bench build --production compiles JS/CSS into apps/[app]/[app]/public/dist/
+  #   inside the configurator container's writable layer (ephemeral — gone on exit).
+  #   bench then creates symlinks: sites/assets/[app] -> apps/[app]/[app]/public/
+  #   These symlinks break in the frontend container because its apps/ layer has
+  #   no compiled dist files (bench init does not run bench build).
+  #
+  #   Fix: after bench build, copy each app's public/ directory as real files into
+  #   sites/assets/[app]/ (replacing the symlinks) inside the sites_assets volume.
+  #   The volume is shared with the frontend container, which can then serve the
+  #   compiled bundles directly without chasing symlinks across container boundaries.
   configurator:
     command:
       - >
@@ -53,7 +57,24 @@ services:
         bench set-config -gp socketio_port $$SOCKETIO_PORT;
         echo "[deploy] Running bench build --production ...";
         bench build --production;
+        echo "[deploy] Copying compiled assets into persistent volume ...";
+        for app in $(ls apps); do
+          pub="/home/frappe/frappe-bench/apps/$$app/$$app/public";
+          if [ -d "$$pub" ]; then
+            rm -rf "sites/assets/$$app";
+            mkdir -p "sites/assets/$$app";
+            cp -r "$$pub/." "sites/assets/$$app";
+          fi;
+        done;
         echo "[deploy] Assets ready.";
+        echo "[deploy] Running migrations for all sites ...";
+        for site in $$(ls sites/ | grep -vE "^assets$$|^apps.txt$$|^common_site_config.json$$"); do
+          if [ -d "sites/$$site" ]; then
+            echo "[deploy] Migrating $$site ...";
+            bench --site $$site migrate || true;
+          fi;
+        done;
+        echo "[deploy] Migrations done.";
     volumes:
       - sites_assets:/home/frappe/frappe-bench/sites/assets
     networks:
@@ -107,22 +128,33 @@ services:
       - bench-network
       - mariadb-network
 
+  # ── Redis services ───────────────────────────────────────────────────────────
+  # The deploy-version label ties Redis to the app image tag. When CUSTOM_TAG
+  # changes (new release), Docker Compose sees Redis as "changed" and recreates
+  # these containers — ensuring they join the same bench-network as the new
+  # bench services. Without this, Redis survives the redeploy unchanged and
+  # stays attached to the old network object, causing DNS failures in workers.
   redis-cache:
+    labels:
+      com.frappe.deploy-version: ${CUSTOM_TAG:-latest}
     networks:
       - bench-network
 
   redis-queue:
+    labels:
+      com.frappe.deploy-version: ${CUSTOM_TAG:-latest}
     networks:
       - bench-network
 
 # ── Volumes ──────────────────────────────────────────────────────────────────
 volumes:
-  # Named shared volume for built frontend assets.
-  # Shared explicitly across all containers so bench build output is visible
-  # to the frontend nginx container immediately.
-  # The upstream Containerfile declares sites/assets as a VOLUME; by mounting
-  # a named volume here we override the per-container anonymous volume that
-  # Docker would otherwise create, which isolates assets between containers.
+  # Named shared volume for compiled frontend assets.
+  # Contains REAL FILES (not symlinks) copied from apps/[app]/public/ by the
+  # configurator on each deploy. This is required because bench build writes
+  # compiled dist files into the configurator container's writable layer
+  # (ephemeral), and bench places symlinks in sites/assets/ pointing back to
+  # apps/ — which breaks in the frontend container where apps/ has no compiled
+  # dist files. Copying resolves the symlinks into actual files in this volume.
   sites_assets:
 
 networks:
