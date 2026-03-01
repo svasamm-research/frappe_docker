@@ -28,13 +28,22 @@
 
 set -euo pipefail
 
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
-info()    { echo -e "${GREEN}[INFO]${NC} $*"; }
-warn()    { echo -e "${YELLOW}[WARN]${NC} $*"; }
-error()   { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
-section() { echo -e "\n${CYAN}══════════════════════════════════════════${NC}"; \
-            echo -e "${CYAN}  $*${NC}"; \
-            echo -e "${CYAN}══════════════════════════════════════════${NC}\n"; }
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+info() { echo -e "${GREEN}[INFO]${NC} $*"; }
+warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
+error() {
+  echo -e "${RED}[ERROR]${NC} $*"
+  exit 1
+}
+section() {
+  echo -e "\n${CYAN}══════════════════════════════════════════${NC}"
+  echo -e "${CYAN}  $*${NC}"
+  echo -e "${CYAN}══════════════════════════════════════════${NC}\n"
+}
 
 [[ "$EUID" -ne 0 ]] && error "Run as root or with sudo."
 
