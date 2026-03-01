@@ -58,7 +58,7 @@
 frappe_docker/
 ├── apps/
 │   ├── cafirm.json          ← prod app list (main branches)
-│   └── cafirm-uat.json      ← UAT app list (develop branches)
+│   └── cafirm-uat.json      ← UAT app list (uat branches)
 ├── overrides/
 │   ├── compose.agent.yaml   ← Option B bench override (no Traefik labels)
 │   ├── compose.redis.yaml   ← Redis bundled with bench
@@ -77,13 +77,13 @@ frappe_docker/
 
 | Repo | Purpose | Branch model |
 |------|---------|--------------|
-| `cafirm_override` | cafirm Frappe customizations | `develop` (UAT) → `main` (prod) |
-| `site_override` | cross-client site customizations | `develop` → `main` |
+| `cafirm_override` | cafirm Frappe customizations | `develop` → `uat` → `main` |
+| `site_override` | cross-client site customizations | `develop` → `uat` → `main` |
 
 Each custom app repo contains:
 ```
 .github/workflows/
-  trigger-image-build.yml   ← dispatches frappe_docker builds on push/release
+  trigger-image-build.yml   ← dispatches frappe_docker builds on GitHub Release
 ```
 
 ---
@@ -97,7 +97,7 @@ Each custom app repo contains:
 | `DOCKERHUB_USERNAME` | Docker Hub username (e.g. `mithunsvasamm`) |
 | `DOCKERHUB_TOKEN` | Docker Hub token — **read+write** (for CI push) |
 | `CAFIRM_APPS_JSON_BASE64` | base64 of `apps/cafirm.json` with HTTPS+PAT URLs (main branches) |
-| `CAFIRM_UAT_APPS_JSON_BASE64` | base64 of `apps/cafirm-uat.json` with HTTPS+PAT URLs (develop branches) |
+| `CAFIRM_UAT_APPS_JSON_BASE64` | base64 of `apps/cafirm-uat.json` with HTTPS+PAT URLs (uat branches) |
 | `DOKPLOY_CAFIRM_WEBHOOK` | Dokploy redeploy webhook for cafirm production bench |
 | `DOKPLOY_CAFIRM_UAT_WEBHOOK` | Dokploy redeploy webhook for cafirm UAT bench |
 
@@ -131,8 +131,8 @@ The base64 secrets used in CI must use **HTTPS + PAT** URLs so GitHub Actions ca
   {"url": "https://github.com/frappe/erpnext", "branch": "version-16"},
   {"url": "https://github.com/frappe/hrms", "branch": "version-16"},
   {"url": "https://github.com/resilient-tech/india-compliance", "branch": "version-16"},
-  {"url": "https://<PAT>@github.com/svasamm-research/site-override.git", "branch": "develop"},
-  {"url": "https://<PAT>@github.com/svasamm-research/cafirm-project-override.git", "branch": "develop"}
+  {"url": "https://<PAT>@github.com/svasamm-research/site-override.git", "branch": "uat"},
+  {"url": "https://<PAT>@github.com/svasamm-research/cafirm-project-override.git", "branch": "uat"}
 ]
 ```
 
@@ -151,89 +151,136 @@ Paste the output as the GitHub Secret value.
 
 ### Branching model (custom app repos)
 
+Three protected branches — **no direct commits to any of them**:
+
 ```
-main       ←─── production (never commit directly)
+main    ←── production-ready. Only merged from uat.
   ▲
-  │  PR (develop → main, reviewed before release)
+  │  PR (uat → main) + Release tagged vX.Y.Z      → Production deploy
   │
-develop    ←─── all feature work merged here
+uat     ←── UAT staging. Cherry-picked from develop.
   ▲
-  │  PR (feature → develop)
+  │  cherry-pick (or merge) from develop
+  │  Release tagged uat-vX.Y.Z                    → UAT deploy
+  │
+develop ←── integration branch. All feature PRs merge here. No deploy.
+  ▲
+  │  PR (feature/* → develop)
   │
 feature/my-feature
 ```
+
+**Deployments are driven by GitHub Releases — never by branch pushes.**
 
 ### Day-to-day development
 
 ```
 1. Create feature branch from develop:
    git checkout develop && git pull
-   git checkout -b feature/my-feature
+   git checkout -b feat/my-feature
 
-2. Make changes, commit, push:
-   git push origin feature/my-feature
+2. Make changes, commit using Conventional Commits format:
+   git commit -m "feat(task): add due-date calculation"
 
-3. Open PR → develop (code review)
+3. Push and open PR → develop:
+   git push origin feat/my-feature
+   (CI: lint + server tests run — no deploy)
 
 4. Merge PR → develop
-   → trigger-image-build.yml dispatches build-cafirm-uat.yml
-   → frappe-cafirm:develop image built & pushed to Docker Hub
-   → (if DOKPLOY_DEPLOY_ENABLED=true) UAT bench auto-redeployed
 
-5. Test on UAT site (testca-uat.svasamm.com)
+5. When ready for UAT — cherry-pick to uat:
+   git checkout uat
+   git cherry-pick <commit-sha>   # or: git merge develop
+   git push origin uat
+   (CI: lint + server tests run again on uat — no deploy yet)
 
-6. Repeat until UAT is stable
+6. Create GitHub Release from uat branch, tag uat-v1.2.0:
+   GitHub → cafirm_override → Releases → Draft new release
+   Target branch: uat  |  Tag: uat-v1.2.0
+   → trigger-image-build.yml fires → UAT image built → UAT bench redeployed
+
+7. Test on UAT site (testca-uat.svasamm.com)
+
+8. Repeat steps 1-7 until UAT is stable
 ```
 
 ### What triggers what
 
-| Action | Trigger | Result |
-|--------|---------|--------|
-| Push to `develop` in `cafirm_override` | `trigger-image-build.yml` | `frappe-cafirm:develop` built |
-| Push to `develop` in `site_override` | `trigger-image-build.yml` | same — both repos share the image |
-| Push to `svasamm/base` (infra change) | `build-cafirm-uat.yml` push trigger | UAT image rebuilt with new Containerfile |
-| Create GitHub Release in `cafirm_override` | `trigger-image-build.yml` | `frappe-cafirm:v1.0.0` built |
+| Action | Tag/Branch | Result |
+|--------|-----------|--------|
+| Publish Release tagged `uat-vX.Y.Z` in `cafirm_override` | `uat-v1.2.0` | `frappe-cafirm:uat-v1.2.0` built from `uat` branch → UAT deploy |
+| Publish Release tagged `vX.Y.Z` in `cafirm_override` | `v1.2.0` | `frappe-cafirm:v1.2.0` built from `main` branch → Production deploy (approval gate) |
+| Push to `svasamm/base` touching `cafirm-uat.json` or `Containerfile` | infra change | UAT image rebuilt (tagged `uat-latest`) |
 
 ---
 
 ## 5. Release & Deployment Process
 
-### UAT Deployment
+### UAT Deployment (step-by-step)
 
-UAT deploys automatically when `develop` is pushed. No manual steps required once `DOKPLOY_DEPLOY_ENABLED=true` and `DOKPLOY_CAFIRM_UAT_WEBHOOK` are set.
-
-Manual UAT redeploy (if needed):
-1. GitHub → `frappe_docker` → Actions → "Build cafirm — UAT" → Run workflow
-
-### Production Deployment (step-by-step)
-
-Production deploys are **always explicit**. A GitHub Release is the gate.
+UAT deploys are triggered by publishing a GitHub Release tagged `uat-vX.Y.Z`.
 
 ```
-Step 1: Ensure UAT is stable and tested.
+Step 1: Ensure develop is green (CI passing).
 
-Step 2: In cafirm_override — merge develop → main
-  git checkout main && git merge develop && git push
+Step 2: Cherry-pick commits to uat (or merge all of develop):
+  git checkout uat
+  git cherry-pick <commit-sha>   # selective promotion
+  git push origin uat
+  (CI lint + server tests run on uat — wait for green)
 
 Step 3: Create GitHub Release in cafirm_override
   GitHub → cafirm_override → Releases → Draft a new release
-  Tag: v1.0.0  (format must be vX.Y.Z)
-  Title: v1.0.0 — brief description
+  Target branch: uat
+  Tag: uat-v1.2.0  (format must be uat-vX.Y.Z)
+  Title: uat-v1.2.0 — brief description
   Publish Release
 
 Step 4: trigger-image-build.yml fires automatically
-  → dispatches build-cafirm.yml in frappe_docker with version=v1.0.0
+  → detects uat-v* tag → dispatches build-cafirm-uat.yml with version=uat-v1.2.0
+
+Step 5: frappe_docker CI runs:
+  ├── build job (frappe-cafirm:uat-v1.2.0 + :uat-v1.2.0-{sha7} pushed to Docker Hub)
+  └── deploy job (triggers Dokploy webhook → UAT bench restarts with new image)
+
+Step 6: Verify on UAT site (testca-uat.svasamm.com).
+```
+
+Manual UAT redeploy without a release (infra changes only):
+```
+GitHub → frappe_docker → Actions → "Build cafirm — UAT" → Run workflow
+(leaves version blank → image tagged uat-latest)
+```
+
+### Production Deployment (step-by-step)
+
+Production deploys are **always explicit**. A GitHub Release tagged `vX.Y.Z` is the gate.
+
+```
+Step 1: Ensure UAT is stable and fully tested.
+
+Step 2: Open PR in cafirm_override: uat → main, get it reviewed and merged.
+
+Step 3: Create GitHub Release in cafirm_override
+  GitHub → cafirm_override → Releases → Draft a new release
+  Target branch: main
+  Tag: v1.2.0  (format must be vX.Y.Z — no uat- prefix)
+  Title: v1.2.0 — brief description
+  Publish Release
+
+Step 4: trigger-image-build.yml fires automatically
+  → detects v* (non-uat) tag → dispatches build-cafirm.yml with version=v1.2.0
 
 Step 5: frappe_docker CI runs:
   ├── validate-version job (checks vX.Y.Z format)
-  ├── build job (frappe-cafirm:v1.0.0 + :v1.0.0-{sha7} pushed to Docker Hub)
+  ├── build job (frappe-cafirm:v1.2.0 + :v1.2.0-{sha7} pushed to Docker Hub)
   └── deploy job (waits for environment approval → triggers Dokploy webhook)
 
 Step 6: (if environment protection enabled) Approve deploy in GitHub UI
   frappe_docker → Actions → running workflow → Review deployments → Approve
 
-Step 7: Dokploy redeployes production bench with new image
-  Bench pulls frappe-cafirm:v1.0.0 and restarts services.
+Step 7: Dokploy redeploys production bench with new image.
+  Bench pulls frappe-cafirm:v1.2.0 and restarts services.
 
 Step 8: Verify production site is healthy.
 ```

@@ -4,25 +4,53 @@ on:
   push:
     branches:
       - main
+      - svasamm/base
   pull_request:
     branches:
       - main
+      - svasamm/base
 
 jobs:
-  lint:
+  # ── 1. Semantic commit titles ────────────────────────────────────────────────
+  semantic-commits:
+    name: Semantic Commits
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 200   # enough history to find the base SHA
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          check-latest: true
+
+      - name: Check all commit titles in this PR
+        run: |
+          npm install @commitlint/cli @commitlint/config-conventional conventional-changelog-conventionalcommits
+          npx commitlint --verbose \
+            --from ${{ github.event.pull_request.base.sha }} \
+            --to   ${{ github.event.pull_request.head.sha }}
+
+  # ── 2. Pre-commit hooks (black, isort, prettier, shellcheck, …) ──────────────
+  lint:
+    name: Pre-commit hooks
+    runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.10.6"
+          python-version: "3.10"
 
       # For shfmt pre-commit hook
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v5
         with:
           go-version: "^1.14"
 

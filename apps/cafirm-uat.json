@@ -13,10 +13,10 @@
   },
   {
     "url": "git+ssh://git@github.com/svasamm-research/site-override.git",
-    "branch": "develop"
+    "branch": "uat"
   },
   {
     "url": "git+ssh://git@github.com/svasamm-research/cafirm-project-override.git",
-    "branch": "develop"
+    "branch": "uat"
   }
 ]
