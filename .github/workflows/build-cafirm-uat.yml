@@ -7,9 +7,12 @@
 # Flow:
 #   cafirm_override: create Release tagged uat-v1.2.0
 #     → trigger-image-build.yml dispatches this workflow with version=uat-v1.2.0
-#       → builds frappe-cafirm:uat-v1.2.0 + :uat-v1.2.0-{sha7}
+#       → builds frappe-cafirm:uat-v1.2.0 + :uat-v1.2.0-{sha7} + :uat-latest
 #         (apps cloned from uat branch)
 #           → deploys to UAT bench via Dokploy webhook
+#
+# The floating tag :uat-latest always points to the newest UAT build.
+# Use CUSTOM_TAG=uat-latest in your Dokploy env file — no config change needed per release.
 #
 # Required GitHub Secrets:
 #   DOCKERHUB_USERNAME              Docker Hub username
@@ -42,6 +45,7 @@ jobs:
       image_name: frappe-cafirm
       frappe_branch: version-16
       image_tag_prefix: ${{ github.event.inputs.version || 'uat-latest' }}
+      floating_tag: uat-latest
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}

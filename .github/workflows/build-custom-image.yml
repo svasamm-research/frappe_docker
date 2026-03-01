@@ -1,21 +1,24 @@
 # Reusable workflow: builds any Svasamm custom Frappe image and pushes to Docker Hub.
 # Each industry image (cafirm, retail, etc.) has its own caller workflow.
 #
+# Tags pushed per build:
+#   1. :PREFIX            — mutable version tag   (e.g. :uat-v0.1.0)
+#   2. :PREFIX-{sha7}     — immutable pinned tag  (e.g. :uat-v0.1.0-abc1234)
+#   3. :FLOATING          — stable mutable tag    (e.g. :uat-latest)
+#      Use this in your Dokploy env file (CUSTOM_TAG=uat-latest) so
+#      deployments always pull the latest build without changing config.
+#
 # UAT caller pattern:
-#   uses: ./.github/workflows/build-custom-image.yml
 #   with:
 #     image_name: frappe-cafirm
-#     frappe_branch: version-16
-#     image_tag_prefix: develop          # → :develop  and :develop-{sha7}
-#   secrets: { DOCKERHUB_USERNAME, DOCKERHUB_TOKEN, APPS_JSON_BASE64 }
+#     image_tag_prefix: uat-v0.1.0
+#     floating_tag: uat-latest           # → always points to latest UAT build
 #
 # Production caller pattern:
-#   uses: ./.github/workflows/build-custom-image.yml
 #   with:
 #     image_name: frappe-cafirm
-#     frappe_branch: version-16
-#     image_tag_prefix: v1.0.0           # → :v1.0.0  and :v1.0.0-{sha7}
-#   secrets: { DOCKERHUB_USERNAME, DOCKERHUB_TOKEN, APPS_JSON_BASE64 }
+#     image_tag_prefix: v1.0.0
+#     floating_tag: latest               # → always points to latest production build
 
 name: Build Custom Frappe Image
 
@@ -35,9 +38,19 @@ on:
         required: true
         type: string
         description: |
-          Tag prefix applied to all Docker Hub tags.
-            UAT:        "develop"  → :develop  + :develop-{sha7}
-            Production: "v1.0.0"  → :v1.0.0  + :v1.0.0-{sha7}
+          Version tag applied to Docker Hub image.
+            UAT:        "uat-v0.1.0"  → :uat-v0.1.0  + :uat-v0.1.0-{sha7}
+            Production: "v1.0.0"      → :v1.0.0      + :v1.0.0-{sha7}
+      floating_tag:
+        required: false
+        type: string
+        default: ""
+        description: |
+          Stable mutable tag that always points to the latest build for this environment.
+          Use this in Dokploy env (CUSTOM_TAG) so deploys auto-pull the newest image.
+            UAT:        "uat-latest"
+            Production: "latest"
+          Leave empty to skip.
     secrets:
       DOCKERHUB_USERNAME:
         required: true
@@ -81,10 +94,19 @@ jobs:
           SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
           BASE="${{ secrets.DOCKERHUB_USERNAME }}/${{ inputs.image_name }}"
           PREFIX="${{ inputs.image_tag_prefix }}"
+          FLOATING="${{ inputs.floating_tag }}"
 
+          # Version-specific tags (always created)
           echo "mutable=${BASE}:${PREFIX}"               >> "$GITHUB_OUTPUT"
           echo "pinned=${BASE}:${PREFIX}-${SHORT_SHA}"   >> "$GITHUB_OUTPUT"
           echo "cache=${BASE}:buildcache-${PREFIX}"      >> "$GITHUB_OUTPUT"
+
+          # Floating tag (e.g. uat-latest) — use in Dokploy CUSTOM_TAG
+          if [ -n "$FLOATING" ]; then
+            echo "floating=${BASE}:${FLOATING}" >> "$GITHUB_OUTPUT"
+          else
+            echo "floating=" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -95,6 +117,7 @@ jobs:
           tags: |
             ${{ steps.tags.outputs.mutable }}
             ${{ steps.tags.outputs.pinned }}
+            ${{ steps.tags.outputs.floating }}
           build-args: |
             FRAPPE_BRANCH=${{ inputs.frappe_branch }}
             APPS_JSON_BASE64=${{ secrets.APPS_JSON_BASE64 }}
@@ -108,5 +131,8 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Tag | Use for |" >> "$GITHUB_STEP_SUMMARY"
           echo "|-----|---------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| \`${{ steps.tags.outputs.mutable }}\` | Mutable latest (auto-updated) |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| \`${{ steps.tags.outputs.pinned }}\`  | Pinned — paste this in Dokploy |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| \`${{ steps.tags.outputs.mutable }}\` | Version tag (this release) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| \`${{ steps.tags.outputs.pinned }}\`  | Pinned — immutable, tied to commit |" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "${{ steps.tags.outputs.floating }}" ]; then
+            echo "| \`${{ steps.tags.outputs.floating }}\` | Floating — use in Dokploy CUSTOM_TAG |" >> "$GITHUB_STEP_SUMMARY"
+          fi

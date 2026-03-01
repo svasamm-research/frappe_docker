@@ -7,8 +7,11 @@
 # Flow:
 #   cafirm_override: create GitHub Release → tag v1.0.0
 #     → trigger-image-build.yml dispatches this workflow with version=v1.0.0
-#       → builds frappe-cafirm:v1.0.0 + :v1.0.0-{sha7}
+#       → builds frappe-cafirm:v1.0.0 + :v1.0.0-{sha7} + :latest
 #         → deploys to production bench via Dokploy webhook
+#
+# The floating tag :latest always points to the newest production build.
+# Use CUSTOM_TAG=latest in your Dokploy env file for auto-pull on redeploy.
 #
 # Required GitHub Secrets:
 #   DOCKERHUB_USERNAME          Docker Hub username
@@ -51,6 +54,7 @@ jobs:
       image_name: frappe-cafirm
       frappe_branch: version-16
       image_tag_prefix: ${{ github.event.inputs.version }}
+      floating_tag: latest
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
