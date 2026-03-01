@@ -42,6 +42,7 @@
 ```
 
 **Key principles:**
+
 - Manager has the only public IP. Agents have no public HTTP/S.
 - Traefik on Manager routes by hostname to the correct Agent + port.
 - Dokploy on Manager SSH-deploys to Agents via private network.
@@ -75,12 +76,13 @@ frappe_docker/
 
 ### Custom app repos (in `svasamm-research` org)
 
-| Repo | Purpose | Branch model |
-|------|---------|--------------|
-| `cafirm_override` | cafirm Frappe customizations | `develop` → `uat` → `main` |
-| `site_override` | cross-client site customizations | `develop` → `uat` → `main` |
+| Repo              | Purpose                          | Branch model               |
+| ----------------- | -------------------------------- | -------------------------- |
+| `cafirm_override` | cafirm Frappe customizations     | `develop` → `uat` → `main` |
+| `site_override`   | cross-client site customizations | `develop` → `uat` → `main` |
 
 Each custom app repo contains:
+
 ```
 .github/workflows/
   trigger-image-build.yml   ← dispatches frappe_docker builds on GitHub Release
@@ -92,32 +94,32 @@ Each custom app repo contains:
 
 ### GitHub Secrets — `svasamm-research/frappe_docker`
 
-| Secret | Description |
-|--------|-------------|
-| `DOCKERHUB_USERNAME` | Docker Hub username (e.g. `mithunsvasamm`) |
-| `DOCKERHUB_TOKEN` | Docker Hub token — **read+write** (for CI push) |
-| `CAFIRM_APPS_JSON_BASE64` | base64 of `apps/cafirm.json` with HTTPS+PAT URLs (main branches) |
+| Secret                        | Description                                                         |
+| ----------------------------- | ------------------------------------------------------------------- |
+| `DOCKERHUB_USERNAME`          | Docker Hub username (e.g. `mithunsvasamm`)                          |
+| `DOCKERHUB_TOKEN`             | Docker Hub token — **read+write** (for CI push)                     |
+| `CAFIRM_APPS_JSON_BASE64`     | base64 of `apps/cafirm.json` with HTTPS+PAT URLs (main branches)    |
 | `CAFIRM_UAT_APPS_JSON_BASE64` | base64 of `apps/cafirm-uat.json` with HTTPS+PAT URLs (uat branches) |
-| `DOKPLOY_CAFIRM_WEBHOOK` | Dokploy redeploy webhook for cafirm production bench |
-| `DOKPLOY_CAFIRM_UAT_WEBHOOK` | Dokploy redeploy webhook for cafirm UAT bench |
+| `DOKPLOY_CAFIRM_WEBHOOK`      | Dokploy redeploy webhook for cafirm production bench                |
+| `DOKPLOY_CAFIRM_UAT_WEBHOOK`  | Dokploy redeploy webhook for cafirm UAT bench                       |
 
 ### GitHub Variables — `svasamm-research/frappe_docker`
 
-| Variable | Value | Effect |
-|----------|-------|--------|
+| Variable                 | Value  | Effect                                             |
+| ------------------------ | ------ | -------------------------------------------------- |
 | `DOKPLOY_DEPLOY_ENABLED` | `true` | Enables auto-redeploy after successful image build |
 
 ### GitHub Secrets — `cafirm_override`
 
-| Secret | Description |
-|--------|-------------|
+| Secret                         | Description                                              |
+| ------------------------------ | -------------------------------------------------------- |
 | `FRAPPE_DOCKER_WORKFLOW_TOKEN` | GitHub PAT with `workflow` scope on `frappe_docker` repo |
 
 ### GitHub Environments — `svasamm-research/frappe_docker`
 
-| Environment | Protection rules |
-|-------------|-----------------|
-| `uat` | None — auto-deploys on successful build |
+| Environment  | Protection rules                                          |
+| ------------ | --------------------------------------------------------- |
+| `uat`        | None — auto-deploys on successful build                   |
 | `production` | Required reviewers — must approve before deploy step runs |
 
 ### Generating apps.json secrets
@@ -126,23 +128,35 @@ The `apps.json` files committed in the repo use `git+ssh://` URLs (for local tes
 The base64 secrets used in CI must use **HTTPS + PAT** URLs so GitHub Actions can clone private repos without SSH keys.
 
 **Template for HTTPS apps.json (do not commit — only store as secret):**
+
 ```json
 [
-  {"url": "https://github.com/frappe/erpnext", "branch": "version-16"},
-  {"url": "https://github.com/frappe/hrms", "branch": "version-16"},
-  {"url": "https://github.com/resilient-tech/india-compliance", "branch": "version-16"},
-  {"url": "https://<PAT>@github.com/svasamm-research/site-override.git", "branch": "uat"},
-  {"url": "https://<PAT>@github.com/svasamm-research/cafirm-project-override.git", "branch": "uat"}
+  { "url": "https://github.com/frappe/erpnext", "branch": "version-16" },
+  { "url": "https://github.com/frappe/hrms", "branch": "version-16" },
+  {
+    "url": "https://github.com/resilient-tech/india-compliance",
+    "branch": "version-16"
+  },
+  {
+    "url": "https://<PAT>@github.com/svasamm-research/site-override.git",
+    "branch": "uat"
+  },
+  {
+    "url": "https://<PAT>@github.com/svasamm-research/cafirm-project-override.git",
+    "branch": "uat"
+  }
 ]
 ```
 
 **To create the base64 secret:**
+
 ```bash
 # UAT
 cat apps/cafirm-uat-https.json | base64 -w 0
 # Prod
 cat apps/cafirm-https.json | base64 -w 0
 ```
+
 Paste the output as the GitHub Secret value.
 
 ---
@@ -206,11 +220,11 @@ feature/my-feature
 
 ### What triggers what
 
-| Action | Tag/Branch | Result |
-|--------|-----------|--------|
-| Publish Release tagged `uat-vX.Y.Z` in `cafirm_override` | `uat-v1.2.0` | `frappe-cafirm:uat-v1.2.0` built from `uat` branch → UAT deploy |
-| Publish Release tagged `vX.Y.Z` in `cafirm_override` | `v1.2.0` | `frappe-cafirm:v1.2.0` built from `main` branch → Production deploy (approval gate) |
-| Push to `svasamm/base` touching `cafirm-uat.json` or `Containerfile` | infra change | UAT image rebuilt (tagged `uat-latest`) |
+| Action                                                               | Tag/Branch   | Result                                                                              |
+| -------------------------------------------------------------------- | ------------ | ----------------------------------------------------------------------------------- |
+| Publish Release tagged `uat-vX.Y.Z` in `cafirm_override`             | `uat-v1.2.0` | `frappe-cafirm:uat-v1.2.0` built from `uat` branch → UAT deploy                     |
+| Publish Release tagged `vX.Y.Z` in `cafirm_override`                 | `v1.2.0`     | `frappe-cafirm:v1.2.0` built from `main` branch → Production deploy (approval gate) |
+| Push to `svasamm/base` touching `cafirm-uat.json` or `Containerfile` | infra change | UAT image rebuilt (tagged `uat-latest`)                                             |
 
 ---
 
@@ -247,6 +261,7 @@ Step 6: Verify on UAT site (testca-uat.svasamm.com).
 ```
 
 Manual UAT redeploy without a release (infra changes only):
+
 ```
 GitHub → frappe_docker → Actions → "Build cafirm — UAT" → Run workflow
 (leaves version blank → image tagged uat-latest)
@@ -287,10 +302,10 @@ Step 8: Verify production site is healthy.
 
 ### Version numbering
 
-| Version part | When to increment |
-|-------------|------------------|
-| `v1.0.0` → `v1.0.1` | Bug fix or minor change |
-| `v1.0.0` → `v1.1.0` | New feature added |
+| Version part        | When to increment                |
+| ------------------- | -------------------------------- |
+| `v1.0.0` → `v1.0.1` | Bug fix or minor change          |
+| `v1.0.0` → `v1.1.0` | New feature added                |
 | `v1.0.0` → `v2.0.0` | Breaking change or major upgrade |
 
 ---
@@ -302,6 +317,7 @@ Example: adding `retail` client alongside `cafirm`.
 ### Step 1 — Create custom app repo
 
 Create `svasamm-research/retail_override` with:
+
 ```
 .github/workflows/trigger-image-build.yml
   ← copy from cafirm_override, change workflow filenames to build-retail*.yml
@@ -313,20 +329,24 @@ Create `svasamm-research/retail_override` with:
 # apps/retail.json — prod (main branches)
 # apps/retail-uat.json — UAT (develop branches)
 ```
+
 Same structure as cafirm, pointing to retail custom apps.
 
 ### Step 3 — Add build workflows to frappe_docker
 
 Copy and rename:
+
 ```
 .github/workflows/build-cafirm.yml     → build-retail.yml
 .github/workflows/build-cafirm-uat.yml → build-retail-uat.yml
 ```
+
 Update: `image_name: frappe-retail`, secret names `RETAIL_*`, environment `uat`/`production`.
 
 ### Step 4 — Add GitHub Secrets
 
 In `svasamm-research/frappe_docker`:
+
 - `RETAIL_APPS_JSON_BASE64`
 - `RETAIL_UAT_APPS_JSON_BASE64`
 - `DOKPLOY_RETAIL_WEBHOOK`
@@ -334,12 +354,12 @@ In `svasamm-research/frappe_docker`:
 
 ### Step 5 — Assign bench port on agent
 
-| Client | Agent | Port | Domain |
-|--------|-------|------|--------|
-| cafirm prod | Prod Agent (10.0.0.2) | 8080 | testca.svasamm.com |
-| cafirm UAT | UAT Agent (10.0.0.3) | 8081 | testca-uat.svasamm.com |
-| retail prod | Prod Agent (10.0.0.2) | 8082 | retail.svasamm.com |
-| retail UAT | UAT Agent (10.0.0.3) | 8083 | retail-uat.svasamm.com |
+| Client      | Agent                 | Port | Domain                 |
+| ----------- | --------------------- | ---- | ---------------------- |
+| cafirm prod | Prod Agent (10.0.0.2) | 8080 | testca.svasamm.com     |
+| cafirm UAT  | UAT Agent (10.0.0.3)  | 8081 | testca-uat.svasamm.com |
+| retail prod | Prod Agent (10.0.0.2) | 8082 | retail.svasamm.com     |
+| retail UAT  | UAT Agent (10.0.0.3)  | 8083 | retail-uat.svasamm.com |
 
 Ports must be unique **per agent**. Different agents can reuse the same port.
 
@@ -405,9 +425,9 @@ curl -fsSL https://raw.githubusercontent.com/svasamm-research/frappe_docker/svas
 Keep this table updated as benches are added.
 
 | Agent IP | Client | Environment | Port |
-|----------|--------|-------------|------|
-| 10.0.0.2 | cafirm | production | 8080 |
-| 10.0.0.3 | cafirm | UAT | 8081 |
+| -------- | ------ | ----------- | ---- |
+| 10.0.0.2 | cafirm | production  | 8080 |
+| 10.0.0.3 | cafirm | UAT         | 8081 |
 
 ---
 
@@ -494,6 +514,7 @@ bench new-site \
 ```
 
 After creating the site:
+
 1. In Dokploy → bench application → Environment: set `SITES=site-domain.com`
    (for multiple sites: `SITES=site1.com,site2.com`)
 2. Redeploy the application (restarts nginx configurator with new site list)
@@ -519,12 +540,14 @@ Also add the new domain to Traefik routing (update `svasamm-routes.yml`).
 
 When a new image is deployed (via CI), benches restart automatically.
 Run migrations if needed:
+
 ```bash
 # In backend container:
 bench --site <site-name> migrate
 ```
 
 Or run for all sites:
+
 ```bash
 bench --all migrate
 ```
@@ -549,12 +572,14 @@ docker network create \
 ### Pull access denied for Docker image
 
 Either:
+
 - Image doesn't exist yet (CI hasn't run) → trigger CI manually
 - Docker Hub credentials not set in Dokploy → Dokploy → Registries → add Docker Hub creds
 
 ### Site not loading — `502 Bad Gateway`
 
 Traefik can reach the Agent but bench isn't responding.
+
 ```bash
 # Check bench services on agent:
 docker ps | grep <bench-name>
@@ -565,6 +590,7 @@ docker logs <frontend-container>
 ### Site not loading — `404 from Traefik`
 
 Traefik has no route for the hostname.
+
 - Verify `svasamm-routes.yml` has the correct `Host()` rule for the domain
 - Verify DNS A record points to Manager public IP (`dig testca.svasamm.com`)
 
@@ -581,6 +607,7 @@ Regenerate the secret using the HTTPS template in Section 3.
 ### Bench not redeploying after new image push
 
 Check:
+
 1. `DOKPLOY_DEPLOY_ENABLED=true` (GitHub Variable in frappe_docker)
 2. `DOKPLOY_CAFIRM_UAT_WEBHOOK` (or prod equivalent) secret is set
 3. Webhook is valid — test it manually:
@@ -590,4 +617,4 @@ Check:
 
 ---
 
-*Last updated: see git log. Always refer to the git history for specific version changes.*
+_Last updated: see git log. Always refer to the git history for specific version changes._

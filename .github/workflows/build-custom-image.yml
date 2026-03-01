@@ -59,8 +59,8 @@ jobs:
     name: Build & Push
     runs-on: ubuntu-latest
     outputs:
-      image_tag:    ${{ steps.tags.outputs.pinned }}
-      mutable_tag:  ${{ steps.tags.outputs.mutable }}
+      image_tag: ${{ steps.tags.outputs.pinned }}
+      mutable_tag: ${{ steps.tags.outputs.mutable }}
 
     steps:
       - name: Checkout
@@ -100,7 +100,7 @@ jobs:
             APPS_JSON_BASE64=${{ secrets.APPS_JSON_BASE64 }}
           # Separate cache per prefix keeps UAT and production layers independent
           cache-from: type=registry,ref=${{ steps.tags.outputs.cache }}
-          cache-to:   type=registry,ref=${{ steps.tags.outputs.cache }},mode=max
+          cache-to: type=registry,ref=${{ steps.tags.outputs.cache }},mode=max
 
       - name: Build summary
         run: |

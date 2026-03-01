@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 200   # enough history to find the base SHA
+          fetch-depth: 200 # enough history to find the base SHA
 
       - uses: actions/setup-node@v4
         with:
@@ -61,3 +61,4 @@ jobs:
         run: pre-commit run --color=always --all-files
         env:
           GO111MODULE: on
+          SKIP: no-commit-to-branch

@@ -53,21 +53,21 @@ jobs:
       image_tag_prefix: ${{ github.event.inputs.version }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN:    ${{ secrets.DOCKERHUB_TOKEN }}
-      APPS_JSON_BASE64:   ${{ secrets.CAFIRM_APPS_JSON_BASE64 }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      APPS_JSON_BASE64: ${{ secrets.CAFIRM_APPS_JSON_BASE64 }}
 
   deploy:
     name: Deploy to Production bench
     needs: build
     runs-on: ubuntu-latest
     if: vars.DOKPLOY_DEPLOY_ENABLED == 'true'
-    environment: production        # Enables GitHub environment protection rules
+    environment: production # Enables GitHub environment protection rules
 
     steps:
       - name: Trigger Dokploy redeploy
         env:
           WEBHOOK_URL: ${{ secrets.DOKPLOY_CAFIRM_WEBHOOK }}
-          IMAGE_TAG:   ${{ needs.build.outputs.image_tag }}
+          IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
         run: |
           if [ -z "$WEBHOOK_URL" ]; then
             echo "DOKPLOY_CAFIRM_WEBHOOK not set — skipping deploy."

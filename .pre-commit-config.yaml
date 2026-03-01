@@ -10,7 +10,7 @@ repos:
       - id: end-of-file-fixer
       # Block direct commits to protected branches — use a PR instead
       - id: no-commit-to-branch
-        args: ['--branch', 'main', '--branch', 'svasamm/base']
+        args: ["--branch", "main", "--branch", "svasamm/base"]
 
   - repo: https://github.com/asottile/pyupgrade
     rev: v3.19.1
@@ -65,4 +65,4 @@ repos:
     hooks:
       - id: commitlint
         stages: [commit-msg]
-        additional_dependencies: ['conventional-changelog-conventionalcommits']
+        additional_dependencies: ["conventional-changelog-conventionalcommits"]

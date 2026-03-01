@@ -34,10 +34,10 @@ correct Agent:port. Agent containers are NOT reachable from the public internet.
 
 ## Files in this directory (safe to commit — no real secrets)
 
-| File | Purpose |
-|------|---------|
-| `mariadb.env.example` | Template for MariaDB env vars |
-| `cafirm.env.example` | Template for cafirm bench env vars |
+| File                          | Purpose                                     |
+| ----------------------------- | ------------------------------------------- |
+| `mariadb.env.example`         | Template for MariaDB env vars               |
+| `cafirm.env.example`          | Template for cafirm bench env vars          |
 | `traefik-routes.yaml.example` | Template for Manager Traefik routing config |
 
 ## Files that live on servers (never commit — real passwords/IPs)
@@ -81,6 +81,7 @@ rm /tmp/cafirm.env /tmp/cafirm.yaml
 ```
 
 In **Dokploy UI → New Application → Docker Compose**:
+
 - Target server: **Agent VPS**
 - Paste contents of `cafirm.yaml`
 - Deploy
@@ -98,6 +99,7 @@ cp gitops/traefik-routes.yaml.example ~/gitops/traefik-routes.yaml
 ```
 
 Then in **Dokploy UI → Settings → Traefik → Advanced Config**:
+
 - Paste the full contents of `~/gitops/traefik-routes.yaml`
 - Save — Traefik picks up changes immediately (no restart needed)
 
@@ -144,8 +146,8 @@ bench new-site \
 
 **Keep a port assignment record:**
 
-| Agent | Private IP | Bench | Port |
-|-------|-----------|-------|------|
-| agent-1 | 10.0.0.2 | cafirm | 8080 |
-| agent-1 | 10.0.0.2 | retail (future) | 8081 |
-| agent-2 | 10.0.0.3 | cafirm (future) | 8080 |
+| Agent   | Private IP | Bench           | Port |
+| ------- | ---------- | --------------- | ---- |
+| agent-1 | 10.0.0.2   | cafirm          | 8080 |
+| agent-1 | 10.0.0.2   | retail (future) | 8081 |
+| agent-2 | 10.0.0.3   | cafirm (future) | 8080 |

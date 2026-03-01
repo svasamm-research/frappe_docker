@@ -24,15 +24,8 @@
 name: Build cafirm — UAT
 
 on:
-  # Infra changes on svasamm/base can also rebuild the UAT image
-  push:
-    branches:
-      - svasamm/base
-    paths:
-      - apps/cafirm-uat.json
-      - images/layered/Containerfile
-
   # Triggered by cafirm_override when a uat-vX.Y.Z release is published
+  # (or manually via "Run workflow" button for infra rebuilds)
   workflow_dispatch:
     inputs:
       version:
@@ -51,8 +44,8 @@ jobs:
       image_tag_prefix: ${{ github.event.inputs.version || 'uat-latest' }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN:    ${{ secrets.DOCKERHUB_TOKEN }}
-      APPS_JSON_BASE64:   ${{ secrets.CAFIRM_UAT_APPS_JSON_BASE64 }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      APPS_JSON_BASE64: ${{ secrets.CAFIRM_UAT_APPS_JSON_BASE64 }}
 
   deploy:
     name: Deploy to UAT bench
@@ -65,7 +58,7 @@ jobs:
       - name: Trigger Dokploy redeploy
         env:
           WEBHOOK_URL: ${{ secrets.DOKPLOY_CAFIRM_UAT_WEBHOOK }}
-          IMAGE_TAG:   ${{ needs.build.outputs.image_tag }}
+          IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
         run: |
           if [ -z "$WEBHOOK_URL" ]; then
             echo "DOKPLOY_CAFIRM_UAT_WEBHOOK not set — skipping deploy."
