@@ -14,6 +14,17 @@
 # The floating tag :uat-latest always points to the newest UAT build.
 # Use CUSTOM_TAG=uat-latest in your Dokploy env file — no config change needed per release.
 #
+# VERSION PINNING:
+#   Upstream app versions are pinned in apps/cafirm-uat.json (release tags, not branches).
+#   frappe_branch stays as version-16 because frappe/build Docker images are only published
+#   per ERPNext release, not per Frappe release. Frappe is cloned at the branch tip during
+#   bench init — minor drift is acceptable within the same major version.
+#
+#   After running `bench update` locally:
+#     1. Update apps/cafirm-uat.json with the new version tags
+#     2. Re-encode and update CAFIRM_UAT_APPS_JSON_BASE64 GitHub secret
+#     3. Trigger a new build
+#
 # Required GitHub Secrets:
 #   DOCKERHUB_USERNAME              Docker Hub username
 #   DOCKERHUB_TOKEN                 Docker Hub token (read+write)

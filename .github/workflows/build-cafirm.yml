@@ -13,6 +13,13 @@
 # The floating tag :latest always points to the newest production build.
 # Use CUSTOM_TAG=latest in your Dokploy env file for auto-pull on redeploy.
 #
+# VERSION PINNING:
+#   Upstream app versions are pinned in apps/cafirm.json (release tags, not branches).
+#   frappe_branch stays as version-16 (see build-cafirm-uat.yml for rationale).
+#
+#   After UAT testing, promote by copying version tags from cafirm-uat.json → cafirm.json,
+#   then re-encode and update CAFIRM_APPS_JSON_BASE64 GitHub secret.
+#
 # Required GitHub Secrets:
 #   DOCKERHUB_USERNAME          Docker Hub username
 #   DOCKERHUB_TOKEN             Docker Hub token (read+write)
