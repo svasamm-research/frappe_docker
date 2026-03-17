@@ -66,6 +66,54 @@ http:
     #   entryPoints: [web]
     #   middlewares: [redirect-https]
 
+    # ── lucoze-admin bench — Agent 1 (10.0.0.2:8082) ───────────────────
+    # HTTPS: terminates SSL here on Manager, then plain HTTP to Agent
+    lucoze-admin-https:
+      rule: "Host(`admin.lucoze.com`)"
+      service: lucoze-admin
+      entryPoints: [websecure]
+      tls:
+        certResolver: letsencrypt
+
+    # HTTP: redirect to HTTPS
+    lucoze-admin-http:
+      rule: "Host(`admin.lucoze.com`)"
+      service: lucoze-admin
+      entryPoints: [web]
+      middlewares: [redirect-https]
+
+    # ── lucoze tenant bench — Agent 1 (10.0.0.2:8083) ──────────────────
+    # HTTPS: terminates SSL here on Manager, then plain HTTP to Agent
+    lucoze-https:
+      rule: "Host(`tenant1.lucoze.com`) || Host(`tenant2.lucoze.com`)"
+      service: lucoze
+      entryPoints: [websecure]
+      tls:
+        certResolver: letsencrypt
+
+    # HTTP: redirect to HTTPS
+    lucoze-http:
+      rule: "Host(`tenant1.lucoze.com`) || Host(`tenant2.lucoze.com`)"
+      service: lucoze
+      entryPoints: [web]
+      middlewares: [redirect-https]
+
+    # ── lucoze-website (static) — Agent 1 (10.0.0.2:8084) ──────────────
+    # HTTPS: terminates SSL here on Manager, then plain HTTP to Agent
+    lucoze-website-https:
+      rule: "Host(`lucoze.com`)"
+      service: lucoze-website
+      entryPoints: [websecure]
+      tls:
+        certResolver: letsencrypt
+
+    # HTTP: redirect to HTTPS
+    lucoze-website-http:
+      rule: "Host(`lucoze.com`)"
+      service: lucoze-website
+      entryPoints: [web]
+      middlewares: [redirect-https]
+
   services:
     # AGENT_PRIVATE_IP:BENCH_PORT → the port exposed by compose.agent.yaml
     cafirm:
@@ -82,6 +130,21 @@ http:
     #   loadBalancer:
     #     servers:
     #       - url: "http://10.0.0.3:8080"  # Agent2 private IP : BENCH_PORT
+
+    lucoze-admin:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.0.2:8082"    # Agent1 private IP : lucoze-admin BENCH_PORT
+
+    lucoze:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.0.2:8083"    # Agent1 private IP : lucoze tenant BENCH_PORT
+
+    lucoze-website:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.0.2:8084"    # Agent1 private IP : lucoze-website static BENCH_PORT
 
   middlewares:
     redirect-https:
