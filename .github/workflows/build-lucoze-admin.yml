@@ -1,0 +1,108 @@
+# Production build for frappe-lucoze-admin image.
+#
+# TRIGGER: workflow_dispatch only — production deploys are always explicit.
+# This workflow is called by lucoze_admin when a GitHub Release is published.
+# The release tag (e.g. v1.0.0) becomes the Docker image version.
+#
+# Flow:
+#   lucoze_admin: create GitHub Release → tag v1.0.0
+#     → trigger-image-build.yml dispatches this workflow with version=v1.0.0
+#       → builds frappe-lucoze-admin:v1.0.0 + :v1.0.0-{sha7} + :latest
+#         → deploys to production bench via Dokploy webhook
+#
+# The floating tag :latest always points to the newest production build.
+# Use CUSTOM_TAG=latest in your Dokploy env file for auto-pull on redeploy.
+#
+# VERSION PINNING:
+#   Upstream app versions are pinned in apps/lucoze-admin.json (release tags, not branches).
+#   frappe_branch stays as version-16 (see build-lucoze-admin-uat.yml for rationale).
+#
+#   After UAT testing, promote by copying version tags from lucoze-admin-uat.json → lucoze-admin.json,
+#   then re-encode and update LUCOZE_ADMIN_APPS_JSON_BASE64 GitHub secret.
+#
+# Required GitHub Secrets:
+#   DOCKERHUB_USERNAME          Docker Hub username
+#   DOCKERHUB_TOKEN             Docker Hub token (read+write)
+#   LUCOZE_ADMIN_APPS_JSON_BASE64     base64 of apps/lucoze-admin.json with HTTPS+PAT URLs
+#                               (custom apps pointing to main branch)
+#   DOKPLOY_LUCOZE_ADMIN_WEBHOOK      Dokploy deploy webhook for production bench
+#
+# Required GitHub Variables:
+#   DOKPLOY_DEPLOY_ENABLED      set to "true" to enable auto-deploy after build
+
+name: Build lucoze-admin — Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. v1.0.0). Must match the git tag in lucoze_admin."
+        required: true
+        type: string
+
+jobs:
+  validate-version:
+    name: Validate version format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check version matches vX.Y.Z
+        run: |
+          if ! echo "${{ github.event.inputs.version }}" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "ERROR: version must be in vX.Y.Z format (e.g. v1.0.0), got: ${{ github.event.inputs.version }}"
+            exit 1
+          fi
+          echo "Version OK: ${{ github.event.inputs.version }}"
+
+  build:
+    name: Build frappe-lucoze-admin (production)
+    needs: validate-version
+    uses: ./.github/workflows/build-custom-image.yml
+    with:
+      image_name: frappe-lucoze-admin
+      frappe_branch: version-16
+      image_tag_prefix: ${{ github.event.inputs.version }}
+      floating_tag: latest
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      APPS_JSON_BASE64: ${{ secrets.LUCOZE_ADMIN_APPS_JSON_BASE64 }}
+
+  deploy:
+    name: Deploy to Production bench
+    needs: build
+    runs-on: ubuntu-latest
+    if: vars.DOKPLOY_DEPLOY_ENABLED == 'true'
+    environment: production # Enables GitHub environment protection rules
+
+    steps:
+      - name: Trigger Dokploy redeploy
+        env:
+          WEBHOOK_URL: ${{ secrets.DOKPLOY_LUCOZE_ADMIN_WEBHOOK }}
+          IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+        run: |
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "DOKPLOY_LUCOZE_ADMIN_WEBHOOK not set — skipping deploy."
+            exit 0
+          fi
+
+          echo "Deploying to production bench..."
+          echo "Image: $IMAGE_TAG"
+
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "$WEBHOOK_URL" -H "Content-Type: application/json")
+
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "Deploy triggered (HTTP $HTTP_STATUS)"
+          else
+            echo "Webhook returned HTTP $HTTP_STATUS"
+            exit 1
+          fi
+
+      - name: Deploy summary
+        if: always()
+        run: |
+          echo "### Production Deploy" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Version**: \`${{ github.event.inputs.version }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Image**: \`${{ needs.build.outputs.image_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Bench**: lucoze-admin production (Hetzner)" >> "$GITHUB_STEP_SUMMARY"

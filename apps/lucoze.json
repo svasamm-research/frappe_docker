@@ -1,0 +1,22 @@
+[
+  {
+    "url": "https://github.com/frappe/erpnext",
+    "branch": "v16.9.1"
+  },
+  {
+    "url": "https://github.com/frappe/hrms",
+    "branch": "v16.4.3"
+  },
+  {
+    "url": "https://github.com/frappe/health",
+    "branch": "v16.0.7"
+  },
+  {
+    "url": "git+ssh://git@github.com/svasamm-research/site-override.git",
+    "branch": "main"
+  },
+  {
+    "url": "git+ssh://git@github.com/svasamm-research/lucoze.git",
+    "branch": "main"
+  }
+]
