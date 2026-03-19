@@ -1,4 +1,4 @@
-# UAT build for frappe-lucoze image.
+# UAT build for lucoze-tenant image.
 #
 # TRIGGER: workflow_dispatch only.
 #   - Called automatically by lucoze when a Release tagged uat-vX.Y.Z is published.
@@ -7,7 +7,7 @@
 # Flow:
 #   lucoze: create Release tagged uat-v1.2.0
 #     → trigger-image-build.yml dispatches this workflow with version=uat-v1.2.0
-#       → builds frappe-lucoze:uat-v1.2.0 + :uat-v1.2.0-{sha7} + :uat-latest
+#       → builds lucoze-tenant:uat-v1.2.0 + :uat-v1.2.0-{sha7} + :uat-latest
 #         (apps cloned from uat branch)
 #           → deploys to UAT bench via Dokploy webhook
 #
@@ -50,10 +50,10 @@ on:
 
 jobs:
   build:
-    name: Build frappe-lucoze (UAT)
+    name: Build lucoze-tenant (UAT)
     uses: ./.github/workflows/build-custom-image.yml
     with:
-      image_name: frappe-lucoze
+      image_name: lucoze-tenant
       frappe_branch: version-16
       image_tag_prefix: ${{ github.event.inputs.version || 'uat-latest' }}
       floating_tag: uat-latest

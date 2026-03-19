@@ -1,4 +1,4 @@
-# Production build for frappe-lucoze image.
+# Production build for lucoze-tenant image.
 #
 # TRIGGER: workflow_dispatch only — production deploys are always explicit.
 # This workflow is called by lucoze when a GitHub Release is published.
@@ -7,7 +7,7 @@
 # Flow:
 #   lucoze: create GitHub Release → tag v1.0.0
 #     → trigger-image-build.yml dispatches this workflow with version=v1.0.0
-#       → builds frappe-lucoze:v1.0.0 + :v1.0.0-{sha7} + :latest
+#       → builds lucoze-tenant:v1.0.0 + :v1.0.0-{sha7} + :latest
 #         → deploys to production bench via Dokploy webhook
 #
 # The floating tag :latest always points to the newest production build.
@@ -54,11 +54,11 @@ jobs:
           echo "Version OK: ${{ github.event.inputs.version }}"
 
   build:
-    name: Build frappe-lucoze (production)
+    name: Build lucoze-tenant (production)
     needs: validate-version
     uses: ./.github/workflows/build-custom-image.yml
     with:
-      image_name: frappe-lucoze
+      image_name: lucoze-tenant
       frappe_branch: version-16
       image_tag_prefix: ${{ github.event.inputs.version }}
       floating_tag: latest
