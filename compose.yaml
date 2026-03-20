@@ -91,5 +91,10 @@ services:
     command: bench schedule
 
 # ERPNext requires local assets access (Frappe does not)
+# Volume names use ${ROUTER} to ensure each bench on the same host
+# gets its own isolated volumes. Without this, multiple benches
+# (e.g., admin + tenant) would share the same sites volume,
+# causing apps.txt and site data to collide.
 volumes:
   sites:
+    name: ${ROUTER:-frappe}_sites

@@ -19,3 +19,4 @@ services:
 
 volumes:
   redis-queue-data:
+    name: ${ROUTER:-frappe}_redis-queue-data

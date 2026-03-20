@@ -149,13 +149,9 @@ services:
 # ── Volumes ──────────────────────────────────────────────────────────────────
 volumes:
   # Named shared volume for compiled frontend assets.
-  # Contains REAL FILES (not symlinks) copied from apps/[app]/public/ by the
-  # configurator on each deploy. This is required because bench build writes
-  # compiled dist files into the configurator container's writable layer
-  # (ephemeral), and bench places symlinks in sites/assets/ pointing back to
-  # apps/ — which breaks in the frontend container where apps/ has no compiled
-  # dist files. Copying resolves the symlinks into actual files in this volume.
+  # Uses ${ROUTER} prefix so each bench gets its own isolated assets volume.
   sites_assets:
+    name: ${ROUTER:-frappe}_sites_assets
 
 networks:
   # Shared MariaDB network — created once per agent in setup-agent.sh
