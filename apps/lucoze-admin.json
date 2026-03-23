@@ -8,7 +8,11 @@
     "branch": "main"
   },
   {
-    "url": "git+ssh://git@github.com/svasamm-research/lucoze_admin.git",
+    "url": "https://github.com/frappe/crm",
+    "branch": "v1.61.1"
+  },
+  {
+    "url": "git+ssh://git@github.com/svasamm-research/lucoze-admin.git",
     "branch": "main"
   }
 ]
