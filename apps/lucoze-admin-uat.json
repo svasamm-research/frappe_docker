@@ -8,6 +8,14 @@
     "branch": "uat"
   },
   {
+    "url": "https://github.com/frappe/crm",
+    "branch": "v1.61.1"
+  },
+  {
+    "url": "git+ssh://git@github.com/svasamm-research/billing.git",
+    "branch": "uat"
+  },
+  {
     "url": "git+ssh://git@github.com/svasamm-research/lucoze_admin.git",
     "branch": "uat"
   }

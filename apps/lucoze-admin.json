@@ -12,6 +12,10 @@
     "branch": "v1.61.1"
   },
   {
+    "url": "git+ssh://git@github.com/svasamm-research/billing.git",
+    "branch": "main"
+  },
+  {
     "url": "git+ssh://git@github.com/svasamm-research/lucoze-admin.git",
     "branch": "main"
   }
