@@ -83,8 +83,28 @@ jobs:
           echo "Deploying to UAT bench..."
           echo "Image: $IMAGE_TAG"
 
+          # Dokploy holds the HTTP connection open while it pulls the new
+          # image and restarts the app. With the default curl timeout, the
+          # connection trips the NAT idle window (~120s) and curl exits 28
+          # — even though Dokploy has already received the request and is
+          # processing it. Bound the curl to 30s and treat both 2xx and
+          # exit 28 as "deploy fired".
+          set +e
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            --connect-timeout 15 --max-time 30 \
             -X POST "$WEBHOOK_URL" -H "Content-Type: application/json")
+          CURL_EXIT=$?
+          set -e
+
+          if [ "$CURL_EXIT" -eq 28 ]; then
+            echo "Deploy fired — webhook held the connection beyond max-time (Dokploy still deploying)."
+            exit 0
+          fi
+
+          if [ "$CURL_EXIT" -ne 0 ]; then
+            echo "curl failed (exit $CURL_EXIT) before reaching Dokploy."
+            exit 1
+          fi
 
           if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
             echo "Deploy triggered (HTTP $HTTP_STATUS)"
