@@ -1,0 +1,110 @@
+# UAT build for dms-tenant image (Videojet OEM deployment).
+#
+# TRIGGER: workflow_dispatch only.
+#   - Called automatically by EITHER dms OR videojet_override when a Release
+#     tagged uat-vX.Y.Z is published (both repos carry trigger-image-build.yml).
+#   - Can also be triggered manually (e.g. after infra changes on svasamm/base).
+#
+# Flow:
+#   dms OR videojet_override: create Release tagged uat-vX.Y.Z
+#     → trigger-image-build.yml dispatches this workflow with version=uat-vX.Y.Z
+#       → builds dms-tenant:uat-vX.Y.Z + :uat-vX.Y.Z-{sha7} + :uat-latest
+#         (dms cloned from uat branch + videojet_override cloned from uat branch)
+#           → deploys to UAT bench via Dokploy webhook
+#
+# The floating tag :uat-latest always points to the newest UAT build.
+# Use CUSTOM_TAG=uat-latest in your Dokploy env file — no config change needed per release.
+#
+# VERSION PINNING — branch-tracking pattern:
+#   Unlike Lucoze (which pins custom apps to tags in apps/lucoze-uat.json),
+#   the dms-tenant image tracks BRANCHES so either dms or videojet_override
+#   can independently cut a release without re-encoding the apps.json secret.
+#
+#   apps/dms-uat.json points dms@uat + videojet_override@uat. The image tag
+#   itself (uat-vX.Y.Z-{sha7}) records which dms SHA was current at build
+#   time. For exact reproducibility (rollback / audit), use the immutable
+#   :uat-vX.Y.Z-{sha7} tag in Dokploy.
+#
+#   To re-pin upstream Frappe / ERPNext / India Compliance:
+#     1. Update apps/dms-uat.json with new version tags
+#     2. Re-encode and update DMS_UAT_APPS_JSON_BASE64 GitHub secret
+#     3. Trigger a new build
+#
+# Required GitHub Secrets:
+#   DOCKERHUB_USERNAME              Docker Hub username
+#   DOCKERHUB_TOKEN                 Docker Hub token (read+write)
+#   DMS_UAT_APPS_JSON_BASE64        base64 of apps/dms-uat.json with HTTPS+PAT URLs
+#                                   (custom apps pointing to uat branch)
+#   DOKPLOY_DMS_UAT_WEBHOOK         Dokploy deploy webhook for dms UAT bench
+#
+# Required GitHub Variables:
+#   DOKPLOY_DEPLOY_ENABLED          set to "true" to enable auto-deploy after build
+
+name: Build dms — UAT
+
+on:
+  # Triggered by dms or videojet_override when a uat-vX.Y.Z release is published
+  # (or manually via "Run workflow" button for infra rebuilds)
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "UAT release tag (e.g. uat-v0.1.0). Defaults to 'uat-latest' for infra-triggered builds."
+        required: false
+        default: "uat-latest"
+        type: string
+
+jobs:
+  build:
+    name: Build dms-tenant (UAT)
+    uses: ./.github/workflows/build-custom-image.yml
+    with:
+      image_name: dms-tenant
+      frappe_branch: version-16
+      image_tag_prefix: ${{ github.event.inputs.version || 'uat-latest' }}
+      floating_tag: uat-latest
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      APPS_JSON_BASE64: ${{ secrets.DMS_UAT_APPS_JSON_BASE64 }}
+
+  deploy:
+    name: Deploy to UAT bench
+    needs: build
+    runs-on: ubuntu-latest
+    if: vars.DOKPLOY_DEPLOY_ENABLED == 'true'
+    environment: uat
+
+    steps:
+      - name: Trigger Dokploy redeploy
+        env:
+          WEBHOOK_URL: ${{ secrets.DOKPLOY_DMS_UAT_WEBHOOK }}
+          IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+        run: |
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "DOKPLOY_DMS_UAT_WEBHOOK not set — skipping deploy."
+            exit 0
+          fi
+
+          echo "Deploying to UAT bench..."
+          echo "Image: $IMAGE_TAG"
+
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "$WEBHOOK_URL" -H "Content-Type: application/json")
+
+          # Tolerate curl exit 28 (timeout) — Dokploy webhook frequently
+          # returns long after deploy is fired; treat as success.
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "Deploy triggered (HTTP $HTTP_STATUS)"
+          else
+            echo "Webhook returned HTTP $HTTP_STATUS"
+            exit 1
+          fi
+
+      - name: Deploy summary
+        if: always()
+        run: |
+          echo "### UAT Deploy" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Version**: \`${{ github.event.inputs.version || 'uat-latest' }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Image**: \`${{ needs.build.outputs.image_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Bench**: dms UAT (Hostinger)" >> "$GITHUB_STEP_SUMMARY"

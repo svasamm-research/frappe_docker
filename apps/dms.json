@@ -1,0 +1,18 @@
+[
+  {
+    "url": "https://github.com/frappe/erpnext",
+    "branch": "v16.9.1"
+  },
+  {
+    "url": "https://github.com/resilient-tech/india-compliance",
+    "branch": "version-16"
+  },
+  {
+    "url": "git+ssh://git@github.com/svasamm-research/dms.git",
+    "branch": "main"
+  },
+  {
+    "url": "git+ssh://git@github.com/svasamm-research/videojet_override.git",
+    "branch": "main"
+  }
+]
