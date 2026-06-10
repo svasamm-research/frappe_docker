@@ -74,7 +74,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: vars.DOKPLOY_DEPLOY_ENABLED == 'true'
-    environment: production    # GitHub environment with required-reviewer gate
+    environment: production # GitHub environment with required-reviewer gate
 
     steps:
       - name: Trigger Dokploy redeploy
