@@ -18,26 +18,36 @@
 # VERSION PINNING — branch-tracking pattern:
 #   Unlike Lucoze (which pins custom apps to tags in apps/lucoze-uat.json),
 #   the dms-tenant image tracks BRANCHES so either dms or videojet_override
-#   can independently cut a release without re-encoding the apps.json secret.
+#   can independently cut a release without re-encoding any secret.
 #
-#   apps/dms-uat.json points dms@uat + videojet_override@uat. The image tag
-#   itself (uat-vX.Y.Z-{sha7}) records which dms SHA was current at build
-#   time. For exact reproducibility (rollback / audit), use the immutable
+#   apps/dms-uat.json (committed in this repo, clean HTTPS URLs, no token)
+#   points dms@uat + videojet_override@uat. The image tag itself
+#   (uat-vX.Y.Z-{sha7}) records which dms SHA was current at build time. For
+#   exact reproducibility (rollback / audit), use the immutable
 #   :uat-vX.Y.Z-{sha7} tag in Dokploy.
 #
 #   To re-pin upstream Frappe / ERPNext / India Compliance:
 #     1. Update apps/dms-uat.json with new version tags
-#     2. Re-encode and update DMS_UAT_APPS_JSON_BASE64 GitHub secret
+#     2. Commit + push (no secret regeneration needed)
 #     3. Trigger a new build
 #
-# Required GitHub Secrets:
+# AUTH (App-mode, GitHub App installation token):
+#   The build-custom-image.yml wrapper mints a short-lived installation token
+#   from the SVASAMM GitHub App and rewrites apps/dms-uat.json URLs to embed
+#   it at build time. Token rotates hourly automatically — no long-lived PAT.
+#
+# Required org-level secrets (all visibility: All repositories):
 #   DOCKERHUB_USERNAME              Docker Hub username
 #   DOCKERHUB_TOKEN                 Docker Hub token (read+write)
-#   DMS_UAT_APPS_JSON_BASE64        base64 of apps/dms-uat.json with HTTPS+PAT URLs
-#                                   (custom apps pointing to uat branch)
+#   SVASAMM_APP_PRIVATE_KEY         PEM-encoded GitHub App private key
+#
+# Required org-level variables:
+#   SVASAMM_APP_ID                  GitHub App ID (e.g. 3418788)
+#
+# Required repo-level secret:
 #   DOKPLOY_DMS_UAT_WEBHOOK         Dokploy deploy webhook for dms UAT bench
 #
-# Required GitHub Variables:
+# Required repo-level variable:
 #   DOKPLOY_DEPLOY_ENABLED          set to "true" to enable auto-deploy after build
 
 name: Build dms — UAT
@@ -62,10 +72,12 @@ jobs:
       frappe_branch: version-16
       image_tag_prefix: ${{ github.event.inputs.version || 'uat-latest' }}
       floating_tag: uat-latest
+      app_id: ${{ vars.SVASAMM_APP_ID }}
+      apps_json_path: apps/dms-uat.json
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      APPS_JSON_BASE64: ${{ secrets.DMS_UAT_APPS_JSON_BASE64 }}
+      GH_APP_PRIVATE_KEY: ${{ secrets.SVASAMM_APP_PRIVATE_KEY }}
 
   deploy:
     name: Deploy to UAT bench

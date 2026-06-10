@@ -51,14 +51,42 @@ on:
             UAT:        "uat-latest"
             Production: "latest"
           Leave empty to skip.
+      app_id:
+        required: false
+        type: string
+        default: ""
+        description: |
+          GitHub App ID for in-flight installation-token auth. Set this AND
+          apps_json_path (and pass GH_APP_PRIVATE_KEY as secret) instead of
+          APPS_JSON_BASE64 to avoid baking long-lived PAT credentials into
+          a per-tenant secret. The workflow reads apps_json_path from the
+          repo, mints a short-lived (~1h) installation token, swaps it into
+          the URL pattern https://x-access-token:TOKEN@github.com/... and
+          base64-encodes the result for the build-arg.
+      apps_json_path:
+        required: false
+        type: string
+        default: ""
+        description: |
+          Repo-relative path to the apps.json that the App-token path should
+          read (e.g. apps/dms-uat.json). Only used when app_id is set.
     secrets:
       DOCKERHUB_USERNAME:
         required: true
       DOCKERHUB_TOKEN:
         required: true
       APPS_JSON_BASE64:
-        required: true
-        description: "Base64-encoded apps.json with actual repo credentials"
+        required: false
+        description: |
+          Base64-encoded apps.json with HTTPS+PAT credentials baked into URLs.
+          Legacy auth path — leave empty if using the App-token path
+          (inputs.app_id + secrets.GH_APP_PRIVATE_KEY).
+      GH_APP_PRIVATE_KEY:
+        required: false
+        description: |
+          PEM-encoded GitHub App private key. Used only when inputs.app_id
+          is set. The org variable SVASAMM_APP_ID + org secret
+          SVASAMM_APP_PRIVATE_KEY satisfy this contract.
     outputs:
       image_tag:
         description: "Immutable pinned tag (e.g. user/frappe-cafirm:v1.0.0-abc1234)"
@@ -108,6 +136,59 @@ jobs:
             echo "floating=" >> "$GITHUB_OUTPUT"
           fi
 
+      # App-mode auth: mint short-lived installation token from the
+      # SVASAMM GitHub App and rewrite the in-repo apps.json URLs to embed
+      # it. Skips if inputs.app_id is empty (PAT-mode path below handles it).
+      - name: Mint GitHub App installation token (App-mode)
+        if: inputs.app_id != ''
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ inputs.app_id }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          owner: svasamm-research
+
+      - name: Build apps.json with App token (App-mode)
+        if: inputs.app_id != ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APPS_JSON_PATH: ${{ inputs.apps_json_path }}
+        run: |
+          if [ ! -f "$APPS_JSON_PATH" ]; then
+            echo "ERROR: apps_json_path '$APPS_JSON_PATH' not found at repo root."
+            exit 1
+          fi
+          jq --arg t "$GH_TOKEN" '
+            map(.url |= (
+              sub("^https://github.com/"; "https://x-access-token:\($t)@github.com/") |
+              sub("^git\\+ssh://git@github.com/"; "https://x-access-token:\($t)@github.com/")
+            ))
+          ' "$APPS_JSON_PATH" | base64 -w 0 > /tmp/apps.b64
+          {
+            echo "APPS_JSON_BASE64<<EOF"
+            cat /tmp/apps.b64
+            echo
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+      # PAT-mode auth (legacy, Lucoze + cafirm): copy the pre-built
+      # APPS_JSON_BASE64 secret into env so the build-args reference is uniform.
+      - name: Use APPS_JSON_BASE64 secret (PAT-mode)
+        if: inputs.app_id == ''
+        env:
+          PAT_APPS_JSON_BASE64: ${{ secrets.APPS_JSON_BASE64 }}
+        run: |
+          if [ -z "$PAT_APPS_JSON_BASE64" ]; then
+            echo "ERROR: neither inputs.app_id nor secrets.APPS_JSON_BASE64 supplied."
+            echo "       One of the two auth paths must be wired."
+            exit 1
+          fi
+          {
+            echo "APPS_JSON_BASE64<<EOF"
+            echo "$PAT_APPS_JSON_BASE64"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
@@ -120,7 +201,7 @@ jobs:
             ${{ steps.tags.outputs.floating }}
           build-args: |
             FRAPPE_BRANCH=${{ inputs.frappe_branch }}
-            APPS_JSON_BASE64=${{ secrets.APPS_JSON_BASE64 }}
+            APPS_JSON_BASE64=${{ env.APPS_JSON_BASE64 }}
           # Separate cache per prefix keeps UAT and production layers independent
           cache-from: type=registry,ref=${{ steps.tags.outputs.cache }}
           cache-to: type=registry,ref=${{ steps.tags.outputs.cache }},mode=max

@@ -8,11 +8,11 @@
     "branch": "version-16"
   },
   {
-    "url": "git+ssh://git@github.com/svasamm-research/dms.git",
+    "url": "https://github.com/svasamm-research/dms.git",
     "branch": "uat"
   },
   {
-    "url": "git+ssh://git@github.com/svasamm-research/videojet_override.git",
+    "url": "https://github.com/svasamm-research/videojet_override.git",
     "branch": "uat"
   }
 ]

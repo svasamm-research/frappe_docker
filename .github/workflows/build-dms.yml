@@ -19,17 +19,23 @@
 #
 #   After UAT testing, promote by:
 #     1. Update apps/dms.json upstream pins if any version bumps
-#     2. Re-encode and update DMS_APPS_JSON_BASE64 GitHub secret
+#     2. Commit + push (no secret regeneration needed under App-mode auth)
 #     3. Trigger a new production build with the matching vX.Y.Z tag
 #
-# Required GitHub Secrets:
+# AUTH (App-mode): same as build-dms-uat.yml — see header there for details.
+#
+# Required org-level secrets:
 #   DOCKERHUB_USERNAME          Docker Hub username
 #   DOCKERHUB_TOKEN             Docker Hub token (read+write)
-#   DMS_APPS_JSON_BASE64        base64 of apps/dms.json with HTTPS+PAT URLs
-#                               (custom apps pointing to main branch)
+#   SVASAMM_APP_PRIVATE_KEY     PEM-encoded GitHub App private key
+#
+# Required org-level variables:
+#   SVASAMM_APP_ID              GitHub App ID
+#
+# Required repo-level secret:
 #   DOKPLOY_DMS_WEBHOOK         Dokploy deploy webhook for production bench
 #
-# Required GitHub Variables:
+# Required repo-level variable:
 #   DOKPLOY_DEPLOY_ENABLED      set to "true" to enable auto-deploy after build
 
 name: Build dms — Production
@@ -64,10 +70,12 @@ jobs:
       frappe_branch: version-16
       image_tag_prefix: ${{ github.event.inputs.version }}
       floating_tag: latest
+      app_id: ${{ vars.SVASAMM_APP_ID }}
+      apps_json_path: apps/dms.json
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      APPS_JSON_BASE64: ${{ secrets.DMS_APPS_JSON_BASE64 }}
+      GH_APP_PRIVATE_KEY: ${{ secrets.SVASAMM_APP_PRIVATE_KEY }}
 
   deploy:
     name: Deploy to production bench
