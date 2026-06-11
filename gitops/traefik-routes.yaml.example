@@ -98,6 +98,40 @@ http:
       entryPoints: [web]
       middlewares: [redirect-https]
 
+    # ── dms UAT bench — Agent 1 (10.0.0.2:8085) ───────────────────────
+    # First Videojet OEM tenant on the dms-tenant image. UAT cluster.
+    # HTTPS: terminates SSL here on Manager, then plain HTTP to Agent
+    dms-uat-https:
+      rule: "Host(`uat.videojet.svasamm.com`)"
+      service: dms-uat
+      entryPoints: [websecure]
+      tls:
+        certResolver: letsencrypt
+
+    # HTTP: redirect to HTTPS
+    dms-uat-http:
+      rule: "Host(`uat.videojet.svasamm.com`)"
+      service: dms-uat
+      entryPoints: [web]
+      middlewares: [redirect-https]
+
+    # ── dms production bench — Agent 1 (10.0.0.2:8086) ────────────────
+    # Production cluster for the dms-tenant image.
+    # HTTPS: terminates SSL here on Manager, then plain HTTP to Agent
+    dms-https:
+      rule: "Host(`videojet.svasamm.com`)"
+      service: dms
+      entryPoints: [websecure]
+      tls:
+        certResolver: letsencrypt
+
+    # HTTP: redirect to HTTPS
+    dms-http:
+      rule: "Host(`videojet.svasamm.com`)"
+      service: dms
+      entryPoints: [web]
+      middlewares: [redirect-https]
+
     # ── lucoze-website (static) — Agent 1 (10.0.0.2:8084) ──────────────
     # HTTPS: terminates SSL here on Manager, then plain HTTP to Agent
     lucoze-website-https:
@@ -145,6 +179,17 @@ http:
       loadBalancer:
         servers:
           - url: "http://10.0.0.2:8084"    # Agent1 private IP : lucoze-website static BENCH_PORT
+
+    dms-uat:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.0.2:8085"    # Agent1 private IP : dms UAT BENCH_PORT
+
+    dms:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.0.2:8086"    # Agent1 private IP : dms production BENCH_PORT
+
 
   middlewares:
     redirect-https:
