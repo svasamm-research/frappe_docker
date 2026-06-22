@@ -12,19 +12,7 @@
     "branch": "svasamm/uat"
   },
   {
-    "url": "https://github.com/svasamm-research/helpdesk.git",
-    "branch": "svasamm/uat"
-  },
-  {
     "url": "https://github.com/svasamm-research/svasamm-crm-defaults.git",
-    "branch": "uat"
-  },
-  {
-    "url": "https://github.com/svasamm-research/svasamm-helpdesk-defaults.git",
-    "branch": "uat"
-  },
-  {
-    "url": "https://github.com/svasamm-research/svasamm-helpdesk.git",
     "branch": "uat"
   },
   {
