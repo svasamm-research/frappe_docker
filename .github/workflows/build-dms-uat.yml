@@ -69,7 +69,7 @@ jobs:
     uses: ./.github/workflows/build-custom-image.yml
     with:
       image_name: dms-tenant
-      frappe_branch: version-16
+      frappe_branch: v16.17.4
       image_tag_prefix: ${{ github.event.inputs.version || 'uat-latest' }}
       floating_tag: uat-latest
       app_id: ${{ vars.SVASAMM_APP_ID }}
