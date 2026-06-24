@@ -8,6 +8,10 @@
     "branch": "version-16"
   },
   {
+    "url": "https://github.com/svasamm-research/videojet-crm-override.git",
+    "branch": "uat"
+  },
+  {
     "url": "https://github.com/svasamm-research/crm.git",
     "branch": "svasamm/uat"
   },
