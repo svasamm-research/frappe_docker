@@ -100,12 +100,16 @@ jobs:
           echo "Deploying to UAT bench..."
           echo "Image: $IMAGE_TAG"
 
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            -X POST "$WEBHOOK_URL" -H "Content-Type: application/json")
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 \
+            -X POST "$WEBHOOK_URL" -H "Content-Type: application/json" || echo "000")
 
-          # Tolerate curl exit 28 (timeout) — Dokploy webhook frequently
-          # returns long after deploy is fired; treat as success.
-          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+          # Dokploy webhooks frequently time out AFTER firing the deploy, so a
+          # timeout (curl exit 28 -> HTTP_STATUS=000) is treated as success.
+          # The `|| echo "000"` is essential: without it, curl's non-zero exit
+          # trips `bash -e` and fails the job before this logic runs.
+          if [ "$HTTP_STATUS" = "000" ]; then
+            echo "Webhook timed out — deploy fired asynchronously, treating as success."
+          elif [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
             echo "Deploy triggered (HTTP $HTTP_STATUS)"
           else
             echo "Webhook returned HTTP $HTTP_STATUS"
