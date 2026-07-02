@@ -44,16 +44,22 @@ RUN export APP_INSTALL_ARGS="" && \
     --verbose \
     /home/frappe/frappe-bench
 
-# Install the 8 monorepo apps. get-app on a local path copies the app into apps/, pip-installs it,
-# and registers it in sites/apps.txt. required_apps is enforced at per-site install-app time, so the
-# get-app order here is not significant; --skip-assets defers the (single) asset build to the end.
+# Install the 8 monorepo apps. `bench get-app <local-path>` can't handle a monorepo subdir in this bench
+# version (AttributeError: 'App' object has no attribute 'org'), so install them the way the proven CI
+# setup_bench.sh does: copy the app into apps/, register it in sites/apps.txt (newline-guarded so it
+# doesn't concatenate onto the last upstream entry), and pip install -e. Then build the SPA + all assets.
 RUN cd /home/frappe/frappe-bench && \
   git clone --depth 1 --branch "${LUCOZE_BRANCH}" "${LUCOZE_REPO}" /tmp/lucoze-platform && \
+  { [ -s sites/apps.txt ] && [ -n "$(tail -c1 sites/apps.txt)" ] && printf '\n' >> sites/apps.txt || true; } && \
   for app in lucoze_base lucoze_financial_base lucoze_clinical_base lucoze_clinical_advance \
              lucoze_diagnostic lucoze_pharmacy lucoze_insurance_tpa lucoze_hr; do \
-    echo "== get-app ${app} ==" && \
-    bench get-app --skip-assets "/tmp/lucoze-platform/apps/${app}"; \
+    echo "== install ${app} ==" && \
+    cp -r "/tmp/lucoze-platform/apps/${app}" "apps/${app}" && \
+    { grep -qx "${app}" sites/apps.txt 2>/dev/null || echo "${app}" >> sites/apps.txt; } && \
+    ./env/bin/pip install -e "apps/${app}"; \
   done && \
+  yarn --cwd apps/lucoze_base install --frozen-lockfile && \
+  yarn --cwd apps/lucoze_base build && \
   bench build && \
   rm -fr /tmp/lucoze-platform && \
   echo "{}" > sites/common_site_config.json && \
