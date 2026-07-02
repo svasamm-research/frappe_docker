@@ -2,6 +2,12 @@
 
 Templates for server-side environment files and generated compose files.
 
+> **Networking note (2026-07-02):** the estate is reachable over **Tailscale**, not
+> the Hetzner private net shown in older blocks. Manager = `lucoze-manager`
+> (100.106.249.28), prod agent = `lucoze-prod` (100.81.54.26), UAT agent =
+> `lucoze-uat` (100.123.149.33). Traefik service URLs + `AGENT_PRIVATE_IP` use these
+> Tailscale IPs; the `10.0.0.2` in other blocks below is historical placeholder.
+
 ## Architecture — Option B (Central Traefik on Manager)
 
 ```
