@@ -40,7 +40,8 @@ correct Agent:port. Agent containers are NOT reachable from the public internet.
 | `cafirm.env.example`          | Template for cafirm bench env vars                |
 | `traefik-routes.yaml.example` | Template for Manager Traefik routing config       |
 | `dms.env.example`             | Template for dms-tenant bench env vars (Videojet) |
-| `lucoze.env.example`          | Template for lucoze-tenant bench env vars         |
+| `lucoze.env.example`          | Template for lucoze-tenant bench env vars (RETIRED) |
+| `lucoze-platform.env.example` | Template for lucoze-platform bench (8-app monorepo) |
 | `lucoze-admin.env.example`    | Template for lucoze-admin bench env vars          |
 
 ## Files that live on servers (never commit — real passwords/IPs)
@@ -210,8 +211,9 @@ bench new-site \
 | agent-1 | 10.0.0.2   | cafirm             | 8080 |
 | agent-1 | 10.0.0.2   | retail (future)    | 8081 |
 | agent-1 | 10.0.0.2   | lucoze-admin       | 8082 |
-| agent-1 | 10.0.0.2   | lucoze (tenant)    | 8083 |
+| agent-1 | 10.0.0.2   | lucoze (tenant)    | 8083 | ← RETIRED (replaced by lucoze-platform) |
 | agent-1 | 10.0.0.2   | lucoze-website     | 8084 |
 | agent-1 | 10.0.0.2   | dms-uat (Videojet) | 8085 |
 | agent-1 | 10.0.0.2   | dms (Videojet)     | 8086 |
+| agent-1 | 10.0.0.2   | lucoze-platform    | 8087 | ← 8-app monorepo, 5 GTM bundles |
 | agent-2 | 10.0.0.3   | cafirm (future)    | 8080 |

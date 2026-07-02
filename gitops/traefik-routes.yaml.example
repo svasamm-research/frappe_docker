@@ -98,6 +98,23 @@ http:
       entryPoints: [web]
       middlewares: [redirect-https]
 
+    # ── lucoze-platform bench — Agent 1 (10.0.0.2:8087) ───────────────
+    # The 8-app monorepo (5 GTM bundles). REPLACES the legacy `lucoze` bench above.
+    # One bench, one Frappe site per bundle (app-subset installed per site).
+    lucoze-platform-https:
+      rule: "Host(`diagnostics.lucoze.com`) || Host(`polyclinic.lucoze.com`) || Host(`hospital.lucoze.com`) || Host(`hospitalent.lucoze.com`)"
+      service: lucoze-platform
+      entryPoints: [websecure]
+      tls:
+        certResolver: letsencrypt
+
+    # HTTP: redirect to HTTPS
+    lucoze-platform-http:
+      rule: "Host(`diagnostics.lucoze.com`) || Host(`polyclinic.lucoze.com`) || Host(`hospital.lucoze.com`) || Host(`hospitalent.lucoze.com`)"
+      service: lucoze-platform
+      entryPoints: [web]
+      middlewares: [redirect-https]
+
     # ── dms UAT bench — Agent 1 (10.0.0.2:8085) ───────────────────────
     # First Videojet OEM tenant on the dms-tenant image. UAT cluster.
     # HTTPS: terminates SSL here on Manager, then plain HTTP to Agent
@@ -173,7 +190,12 @@ http:
     lucoze:
       loadBalancer:
         servers:
-          - url: "http://10.0.0.2:8083"    # Agent1 private IP : lucoze tenant BENCH_PORT
+          - url: "http://10.0.0.2:8083"    # Agent1 private IP : lucoze tenant BENCH_PORT (RETIRED)
+
+    lucoze-platform:
+      loadBalancer:
+        servers:
+          - url: "http://10.0.0.2:8087"    # Agent1 private IP : lucoze-platform BENCH_PORT
 
     lucoze-website:
       loadBalancer:
