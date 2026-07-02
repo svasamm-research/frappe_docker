@@ -98,7 +98,7 @@ http:
       entryPoints: [web]
       middlewares: [redirect-https]
 
-    # ── lucoze-platform bench — Agent 1 (10.0.0.2:8087) ───────────────
+    # ── lucoze-platform bench — lucoze-uat agent (100.123.149.33:8087) ─
     # The 8-app monorepo (5 GTM bundles). REPLACES the legacy `lucoze` bench above.
     # One bench, one Frappe site per bundle (app-subset installed per site).
     lucoze-platform-https:
@@ -195,7 +195,7 @@ http:
     lucoze-platform:
       loadBalancer:
         servers:
-          - url: "http://10.0.0.2:8087"    # Agent1 private IP : lucoze-platform BENCH_PORT
+          - url: "http://100.123.149.33:8087"    # lucoze-uat Tailscale IP : lucoze-platform BENCH_PORT
 
     lucoze-website:
       loadBalancer:
