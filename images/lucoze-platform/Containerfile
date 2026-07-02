@@ -1,0 +1,87 @@
+# Lucoze PLATFORM image — the 8-app monorepo (svasamm-research/lucoze).
+#
+# Unlike the other Svasamm images, Lucoze Platform is a MONOREPO: one git repo whose 8 Frappe apps
+# live under apps/. The stock layered build (bench init --apps_path=apps.json) installs one app per
+# URL, so it cannot pull a monorepo. This Containerfile therefore:
+#   1. bench init + install the UPSTREAM apps (erpnext/hrms/health) from APPS_JSON_BASE64, then
+#   2. clone the monorepo once and `bench get-app` each of its 8 subdir apps.
+#
+# Build-args:
+#   FRAPPE_BRANCH      pinned frappe framework tag (v16.20.0 — see monorepo docs/DEPENDENCIES.md)
+#   APPS_JSON_BASE64   base64 of apps/lucoze-platform.json (erpnext/hrms/health, tag-pinned)
+#   LUCOZE_REPO        clone URL for the monorepo WITH creds baked in by CI, e.g.
+#                        https://x-access-token:<token>@github.com/svasamm-research/lucoze
+#   LUCOZE_BRANCH      monorepo ref to build (release tag e.g. v1.0.0, or main)
+
+ARG FRAPPE_BRANCH=v16.20.0
+
+FROM frappe/build:${FRAPPE_BRANCH} AS builder
+
+ARG FRAPPE_BRANCH=v16.20.0
+ARG FRAPPE_PATH=https://github.com/frappe/frappe
+ARG APPS_JSON_BASE64
+ARG LUCOZE_REPO
+ARG LUCOZE_BRANCH=main
+
+USER root
+
+RUN if [ -n "${APPS_JSON_BASE64}" ]; then \
+    mkdir /opt/frappe && echo "${APPS_JSON_BASE64}" | base64 -d > /opt/frappe/apps.json; \
+  fi
+
+USER frappe
+
+RUN export APP_INSTALL_ARGS="" && \
+  if [ -n "${APPS_JSON_BASE64}" ]; then \
+    export APP_INSTALL_ARGS="--apps_path=/opt/frappe/apps.json"; \
+  fi && \
+  bench init ${APP_INSTALL_ARGS}\
+    --frappe-branch=${FRAPPE_BRANCH} \
+    --frappe-path=${FRAPPE_PATH} \
+    --no-procfile \
+    --no-backups \
+    --skip-redis-config-generation \
+    --verbose \
+    /home/frappe/frappe-bench
+
+# Install the 8 monorepo apps. get-app on a local path copies the app into apps/, pip-installs it,
+# and registers it in sites/apps.txt. required_apps is enforced at per-site install-app time, so the
+# get-app order here is not significant; --skip-assets defers the (single) asset build to the end.
+RUN cd /home/frappe/frappe-bench && \
+  git clone --depth 1 --branch "${LUCOZE_BRANCH}" "${LUCOZE_REPO}" /tmp/lucoze-platform && \
+  for app in lucoze_base lucoze_financial_base lucoze_clinical_base lucoze_clinical_advance \
+             lucoze_diagnostic lucoze_pharmacy lucoze_insurance_tpa lucoze_hr; do \
+    echo "== get-app ${app} ==" && \
+    bench get-app --skip-assets "/tmp/lucoze-platform/apps/${app}"; \
+  done && \
+  bench build && \
+  rm -fr /tmp/lucoze-platform && \
+  echo "{}" > sites/common_site_config.json && \
+  find apps -mindepth 1 -path "*/.git" | xargs rm -fr
+
+FROM frappe/base:${FRAPPE_BRANCH} AS backend
+
+USER frappe
+
+COPY --from=builder --chown=frappe:frappe /home/frappe/frappe-bench /home/frappe/frappe-bench
+
+WORKDIR /home/frappe/frappe-bench
+
+VOLUME [ \
+  "/home/frappe/frappe-bench/sites", \
+  "/home/frappe/frappe-bench/sites/assets", \
+  "/home/frappe/frappe-bench/logs" \
+]
+
+CMD [ \
+  "/home/frappe/frappe-bench/env/bin/gunicorn", \
+  "--chdir=/home/frappe/frappe-bench/sites", \
+  "--bind=0.0.0.0:8000", \
+  "--threads=4", \
+  "--workers=2", \
+  "--worker-class=gthread", \
+  "--worker-tmp-dir=/dev/shm", \
+  "--timeout=120", \
+  "--preload", \
+  "frappe.app:application" \
+]
