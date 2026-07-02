@@ -102,7 +102,7 @@ http:
     # The 8-app monorepo (5 GTM bundles). REPLACES the legacy `lucoze` bench above.
     # One bench, one Frappe site per bundle (app-subset installed per site).
     lucoze-platform-https:
-      rule: "Host(`diagnostics.lucoze.com`) || Host(`polyclinic.lucoze.com`) || Host(`hospital.lucoze.com`) || Host(`hospitalent.lucoze.com`)"
+      rule: "Host(`pharmacy.lucoze.com`) || Host(`diagnostics.lucoze.com`) || Host(`polyclinic.lucoze.com`) || Host(`hospital.lucoze.com`) || Host(`hospitalent.lucoze.com`)"
       service: lucoze-platform
       entryPoints: [websecure]
       tls:
@@ -110,7 +110,7 @@ http:
 
     # HTTP: redirect to HTTPS
     lucoze-platform-http:
-      rule: "Host(`diagnostics.lucoze.com`) || Host(`polyclinic.lucoze.com`) || Host(`hospital.lucoze.com`) || Host(`hospitalent.lucoze.com`)"
+      rule: "Host(`pharmacy.lucoze.com`) || Host(`diagnostics.lucoze.com`) || Host(`polyclinic.lucoze.com`) || Host(`hospital.lucoze.com`) || Host(`hospitalent.lucoze.com`)"
       service: lucoze-platform
       entryPoints: [web]
       middlewares: [redirect-https]
