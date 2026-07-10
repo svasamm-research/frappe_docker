@@ -69,7 +69,15 @@ jobs:
     uses: ./.github/workflows/build-custom-image.yml
     with:
       image_name: dms-tenant
-      frappe_branch: version-16
+      # PINNED (2026-07-10): frappe was tracking version-16 HEAD, which drifted
+      # ahead of local (16.25.0) and broke UAT — Gravatar migration prompt +
+      # CRM Lead/Deal save 500 (assign_to.add signature change). frappe/build +
+      # frappe/base publish version-tagged images (v16.25.0 exists), and the
+      # Containerfile uses FRAPPE_BRANCH for both the base image and the frappe
+      # clone ref, so a version tag pins all three. Bump this deliberately (and
+      # re-test) rather than tracking HEAD. Keep in step with erpnext in
+      # apps/dms-uat.json.
+      frappe_branch: v16.25.0
       image_tag_prefix: ${{ github.event.inputs.version || 'uat-latest' }}
       floating_tag: uat-latest
       app_id: ${{ vars.SVASAMM_APP_ID }}
