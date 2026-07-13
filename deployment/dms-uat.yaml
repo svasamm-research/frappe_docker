@@ -1,0 +1,247 @@
+name: frappe_docker
+networks:
+  bench-network:
+    external: false
+    name: ${ROUTER}
+  mariadb-network:
+    external: true
+    name: mariadb-network
+services:
+  backend:
+    depends_on:
+      configurator:
+        condition: service_completed_successfully
+        required: true
+    image: ${CUSTOM_IMAGE:-frappe/erpnext}:${CUSTOM_TAG:-$ERPNEXT_VERSION}
+    networks:
+      bench-network: null
+      mariadb-network: null
+    platform: linux/amd64
+    pull_policy: ${PULL_POLICY:-always}
+    restart: ${RESTART_POLICY:-unless-stopped}
+    volumes:
+      - source: sites
+        target: /home/frappe/frappe-bench/sites
+        type: volume
+        volume: {}
+      - source: sites_assets
+        target: /home/frappe/frappe-bench/sites/assets
+        type: volume
+        volume: {}
+  configurator:
+    command:
+      - |
+        ls -1 apps > sites/apps.txt; bench set-config -g db_host $$DB_HOST; bench set-config -gp db_port $$DB_PORT; bench set-config -g redis_cache "redis://$$REDIS_CACHE"; bench set-config -g redis_queue "redis://$$REDIS_QUEUE"; bench set-config -g redis_socketio "redis://$$REDIS_QUEUE"; bench set-config -gp socketio_port $$SOCKETIO_PORT; echo "[deploy] Running bench build --production ..."; bench build --production --app frappe --app erpnext --app india_compliance; echo "[deploy] Copying compiled assets into persistent volume ..."; for app in $(ls apps); do
+          pub="/home/frappe/frappe-bench/apps/$$app/$$app/public";
+          if [ -d "$$pub" ]; then
+            rm -rf "sites/assets/$$app";
+            mkdir -p "sites/assets/$$app";
+            cp -r "$$pub/." "sites/assets/$$app";
+          fi;
+        done; echo "[deploy] Assets ready."; echo "[deploy] Running migrations for all sites ..."; for site in $$(ls sites/ | grep -vE "^assets$$|^apps.txt$$|^common_site_config.json$$"); do
+          if [ -d "sites/$$site" ]; then
+            echo "[deploy] Migrating $$site ...";
+            bench --site $$site migrate || true;
+          fi;
+        done; echo "[deploy] Migrations done.";
+    depends_on:
+      redis-cache:
+        condition: service_started
+        required: true
+      redis-queue:
+        condition: service_started
+        required: true
+    entrypoint:
+      - bash
+      - -c
+    environment:
+      - DB_HOST=${DB_HOST:-}
+      - DB_PORT=${DB_PORT:-}
+      - REDIS_CACHE=redis-cache:6379
+      - REDIS_QUEUE=redis-queue:6379
+      - SOCKETIO_PORT=9000
+    image: ${CUSTOM_IMAGE:-frappe/erpnext}:${CUSTOM_TAG:-$ERPNEXT_VERSION}
+    networks:
+      bench-network: null
+      mariadb-network: null
+    platform: linux/amd64
+    pull_policy: ${PULL_POLICY:-always}
+    restart: on-failure
+    volumes:
+      - source: sites
+        target: /home/frappe/frappe-bench/sites
+        type: volume
+        volume: {}
+      - source: sites_assets
+        target: /home/frappe/frappe-bench/sites/assets
+        type: volume
+        volume: {}
+  frontend:
+    command:
+      - nginx-entrypoint.sh
+    depends_on:
+      backend:
+        condition: service_started
+        required: true
+      websocket:
+        condition: service_started
+        required: true
+    environment:
+      BACKEND: backend:8000
+      CLIENT_MAX_BODY_SIZE: ${CLIENT_MAX_BODY_SIZE:-50m}
+      FRAPPE_SITE_NAME_HEADER: ${FRAPPE_SITE_NAME_HEADER:-$$host}
+      PROXY_READ_TIMEOUT: ${PROXY_READ_TIMEOUT:-120}
+      SOCKETIO: websocket:9000
+      UPSTREAM_REAL_IP_ADDRESS: ${UPSTREAM_REAL_IP_ADDRESS:-127.0.0.1}
+      UPSTREAM_REAL_IP_HEADER: ${UPSTREAM_REAL_IP_HEADER:-X-Forwarded-For}
+      UPSTREAM_REAL_IP_RECURSIVE: ${UPSTREAM_REAL_IP_RECURSIVE:-off}
+    image: ${CUSTOM_IMAGE:-frappe/erpnext}:${CUSTOM_TAG:-$ERPNEXT_VERSION}
+    networks:
+      bench-network: null
+    platform: linux/amd64
+    ports:
+      - ${AGENT_PRIVATE_IP}:${BENCH_PORT}:8080
+    pull_policy: ${PULL_POLICY:-always}
+    restart: ${RESTART_POLICY:-unless-stopped}
+    volumes:
+      - source: sites
+        target: /home/frappe/frappe-bench/sites
+        type: volume
+        volume: {}
+      - source: sites_assets
+        target: /home/frappe/frappe-bench/sites/assets
+        type: volume
+        volume: {}
+  queue-long:
+    command: bench worker --queue long,default,short
+    depends_on:
+      configurator:
+        condition: service_completed_successfully
+        required: true
+    image: ${CUSTOM_IMAGE:-frappe/erpnext}:${CUSTOM_TAG:-$ERPNEXT_VERSION}
+    networks:
+      bench-network: null
+      mariadb-network: null
+    platform: linux/amd64
+    pull_policy: ${PULL_POLICY:-always}
+    restart: ${RESTART_POLICY:-unless-stopped}
+    volumes:
+      - source: sites
+        target: /home/frappe/frappe-bench/sites
+        type: volume
+        volume: {}
+      - source: sites_assets
+        target: /home/frappe/frappe-bench/sites/assets
+        type: volume
+        volume: {}
+  queue-short:
+    command: bench worker --queue short,default
+    depends_on:
+      configurator:
+        condition: service_completed_successfully
+        required: true
+    image: ${CUSTOM_IMAGE:-frappe/erpnext}:${CUSTOM_TAG:-$ERPNEXT_VERSION}
+    networks:
+      bench-network: null
+      mariadb-network: null
+    platform: linux/amd64
+    pull_policy: ${PULL_POLICY:-always}
+    restart: ${RESTART_POLICY:-unless-stopped}
+    volumes:
+      - source: sites
+        target: /home/frappe/frappe-bench/sites
+        type: volume
+        volume: {}
+      - source: sites_assets
+        target: /home/frappe/frappe-bench/sites/assets
+        type: volume
+        volume: {}
+  redis-cache:
+    image: redis:6.2-alpine
+    labels:
+      com.frappe.deploy-version: ${CUSTOM_TAG:-latest}
+    networks:
+      bench-network: null
+    restart: unless-stopped
+  redis-queue:
+    image: redis:6.2-alpine
+    labels:
+      com.frappe.deploy-version: ${CUSTOM_TAG:-latest}
+    networks:
+      bench-network: null
+    restart: unless-stopped
+    volumes:
+      - source: redis-queue-data
+        target: /data
+        type: volume
+        volume: {}
+  scheduler:
+    command: bench schedule
+    depends_on:
+      configurator:
+        condition: service_completed_successfully
+        required: true
+    image: ${CUSTOM_IMAGE:-frappe/erpnext}:${CUSTOM_TAG:-$ERPNEXT_VERSION}
+    networks:
+      bench-network: null
+      mariadb-network: null
+    platform: linux/amd64
+    pull_policy: ${PULL_POLICY:-always}
+    restart: ${RESTART_POLICY:-unless-stopped}
+    volumes:
+      - source: sites
+        target: /home/frappe/frappe-bench/sites
+        type: volume
+        volume: {}
+      - source: sites_assets
+        target: /home/frappe/frappe-bench/sites/assets
+        type: volume
+        volume: {}
+  websocket:
+    command:
+      - node
+      - /home/frappe/frappe-bench/apps/frappe/socketio.js
+    depends_on:
+      configurator:
+        condition: service_completed_successfully
+        required: true
+    image: ${CUSTOM_IMAGE:-frappe/erpnext}:${CUSTOM_TAG:-$ERPNEXT_VERSION}
+    networks:
+      bench-network: null
+      mariadb-network: null
+    platform: linux/amd64
+    pull_policy: ${PULL_POLICY:-always}
+    restart: ${RESTART_POLICY:-unless-stopped}
+    volumes:
+      - source: sites
+        target: /home/frappe/frappe-bench/sites
+        type: volume
+        volume: {}
+      - source: sites_assets
+        target: /home/frappe/frappe-bench/sites/assets
+        type: volume
+        volume: {}
+volumes:
+  redis-queue-data:
+    name: ${ROUTER:-frappe}_redis-queue-data
+  sites:
+    name: ${ROUTER:-frappe}_sites
+  sites_assets:
+    name: ${ROUTER:-frappe}_sites_assets
+x-backend-defaults:
+  depends_on:
+    configurator:
+      condition: service_completed_successfully
+  image: ${CUSTOM_IMAGE:-frappe/erpnext}:${CUSTOM_TAG:-$ERPNEXT_VERSION}
+  pull_policy: ${PULL_POLICY:-always}
+  restart: ${RESTART_POLICY:-unless-stopped}
+  volumes:
+    - sites:/home/frappe/frappe-bench/sites
+x-customizable-image:
+  image: ${CUSTOM_IMAGE:-frappe/erpnext}:${CUSTOM_TAG:-$ERPNEXT_VERSION}
+  pull_policy: ${PULL_POLICY:-always}
+  restart: ${RESTART_POLICY:-unless-stopped}
+x-depends-on-configurator:
+  depends_on:
+    configurator:
+      condition: service_completed_successfully
