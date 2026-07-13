@@ -31,7 +31,7 @@ services:
   configurator:
     command:
       - |
-        ls -1 apps > sites/apps.txt; bench set-config -g db_host $$DB_HOST; bench set-config -gp db_port $$DB_PORT; bench set-config -g redis_cache "redis://$$REDIS_CACHE"; bench set-config -g redis_queue "redis://$$REDIS_QUEUE"; bench set-config -g redis_socketio "redis://$$REDIS_QUEUE"; bench set-config -gp socketio_port $$SOCKETIO_PORT; echo "[deploy] Running bench build --production ..."; bench build --production; echo "[deploy] Copying compiled assets into persistent volume ..."; for app in $(ls apps); do
+        ls -1 apps > sites/apps.txt; bench set-config -g db_host $$DB_HOST; bench set-config -gp db_port $$DB_PORT; bench set-config -g redis_cache "redis://$$REDIS_CACHE"; bench set-config -g redis_queue "redis://$$REDIS_QUEUE"; bench set-config -g redis_socketio "redis://$$REDIS_QUEUE"; bench set-config -gp socketio_port $$SOCKETIO_PORT; echo "[deploy] Running bench build --production ..."; bench build --production --force --app frappe --app erpnext --app india_compliance; echo "[deploy] Copying compiled assets into persistent volume ..."; for app in $(ls apps); do
           pub="/home/frappe/frappe-bench/apps/$$app/$$app/public";
           if [ -d "$$pub" ]; then
             rm -rf "sites/assets/$$app";
