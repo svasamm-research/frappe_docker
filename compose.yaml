@@ -33,12 +33,37 @@ services:
         bench set-config -g redis_queue "redis://$$REDIS_QUEUE";
         bench set-config -g redis_socketio "redis://$$REDIS_QUEUE";
         bench set-config -gp socketio_port $$SOCKETIO_PORT;
+        if [ -n "$$MAIL_SERVER" ]; then
+        bench set-config -g mail_server "$$MAIL_SERVER";
+        bench set-config -gp mail_port "$$MAIL_PORT";
+        bench set-config -gp use_tls "$$MAIL_USE_TLS";
+        bench set-config -g mail_login "$$MAIL_LOGIN";
+        bench set-config -g mail_password "$$MAIL_PASSWORD";
+        bench set-config -g auto_email_id "$$MAIL_SENDER";
+        bench set-config -g email_sender_name "$$MAIL_SENDER_NAME";
+        fi;
+        if [ -n "$$WHATSAPP_SERVICE_URL" ]; then
+        bench set-config -g whatsapp_service_url "$$WHATSAPP_SERVICE_URL";
+        bench set-config -g whatsapp_service_token "$$WHATSAPP_SERVICE_TOKEN";
+        fi;
     environment:
       DB_HOST: ${DB_HOST:-}
       DB_PORT: ${DB_PORT:-}
       REDIS_CACHE: ${REDIS_CACHE:-}
       REDIS_QUEUE: ${REDIS_QUEUE:-}
       SOCKETIO_PORT: 9000
+      # Platform-wide outbound messaging (blank = mock; set on the deploy env / dokploy).
+      # SES SMTP for all sites (Frappe builds the outgoing account from common_site_config).
+      MAIL_SERVER: ${MAIL_SERVER:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USE_TLS: ${MAIL_USE_TLS:-1}
+      MAIL_LOGIN: ${MAIL_LOGIN:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_SENDER: ${MAIL_SENDER:-noreply@lucoze.com}
+      MAIL_SENDER_NAME: ${MAIL_SENDER_NAME:-Lucoze}
+      # svasamm-whatsapp gateway (one shared service; platform calls it per tenant_id)
+      WHATSAPP_SERVICE_URL: ${WHATSAPP_SERVICE_URL:-}
+      WHATSAPP_SERVICE_TOKEN: ${WHATSAPP_SERVICE_TOKEN:-}
     depends_on: {}
     restart: on-failure
 

@@ -34,7 +34,7 @@ on:
 
 env:
   FRAPPE_BRANCH: v16.20.0
-  IMAGE_NAME: lucoze-tenant   # reuse the (soon-idle) legacy tenant repo; platform replaces legacy
+  IMAGE_NAME: lucoze-tenant # reuse the (soon-idle) legacy tenant repo; platform replaces legacy
   MONOREPO: svasamm-research/lucoze
 
 jobs:
