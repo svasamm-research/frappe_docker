@@ -213,7 +213,7 @@ bench new-site \
 **Keep a port assignment record:**
 
 | Agent   | Private IP | Bench              | Port |
-| ------- | ---------- | ------------------ | ---- |
+| ------- | ---------- | ------------------ | ---- | --------------------------------------- |
 | agent-1 | 10.0.0.2   | cafirm             | 8080 |
 | agent-1 | 10.0.0.2   | retail (future)    | 8081 |
 | agent-1 | 10.0.0.2   | lucoze-admin       | 8082 |
