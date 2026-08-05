@@ -9,6 +9,13 @@ compose.custom.yaml
 compose.prod.yaml
 compose.*.generated.yaml
 
+# Per-project filled-in env files and generated compose outputs.
+# Real production passwords/IPs live here — never commit.
+# Structure: env/<product>/, yaml/<product>/
+env/
+yaml/
+!gitops/*.env.example
+
 # mounted volume
 sites
 

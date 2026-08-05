@@ -16,7 +16,7 @@
     "branch": "uat"
   },
   {
-    "url": "git+ssh://git@github.com/svasamm-research/lucoze_admin.git",
+    "url": "git+ssh://git@github.com/svasamm-research/lucoze-admin.git",
     "branch": "uat"
   }
 ]
