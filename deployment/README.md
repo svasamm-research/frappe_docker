@@ -9,6 +9,7 @@ deployed with `--no-interpolate`).
 - `dms.yaml` — production bench
 
 ## configurator note
+
 The `configurator` service rebuilds only the apps that have esbuild bundles +
 generate `assets.json` (`bench build --production --app frappe --app erpnext
 --app india_compliance`). The CRM/Helpdesk Vue SPAs are pre-built in the image
