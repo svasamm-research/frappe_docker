@@ -1,0 +1,18 @@
+[
+  {
+    "url": "https://github.com/frappe/erpnext",
+    "branch": "v16.21.0"
+  },
+  {
+    "url": "https://github.com/frappe/hrms",
+    "branch": "v16.7.1"
+  },
+  {
+    "url": "https://github.com/resilient-tech/india-compliance",
+    "branch": "version-16"
+  },
+  {
+    "url": "git+ssh://git@github.com/svasamm-research/millingo.git",
+    "branch": "main"
+  }
+]

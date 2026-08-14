@@ -1,0 +1,64 @@
+# Production build for the Millingo (rice-mill ERP) image.
+#
+# TRIGGER: workflow_dispatch only — called by the millingo repo when a Release tagged
+#   vX.Y.Z (no `uat-` prefix) is published. Builds svasamm/millingo:vX.Y.Z +
+#   :vX.Y.Z-{sha7} + :latest, apps cloned from `main`, then deploys via Dokploy webhook.
+#
+# ⚠️ TD-001: resolve the sidebar plan-gating (Frappe > 16.17.5) before production — see
+#    build-millingo-uat.yml header.
+#
+# Required GitHub Secrets: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN,
+#   MILLINGO_APPS_JSON_BASE64 (base64 of apps/millingo.json, HTTPS+PAT, `main` branch),
+#   DOKPLOY_MILLINGO_WEBHOOK.
+# Required GitHub Variables: DOKPLOY_DEPLOY_ENABLED = "true" to auto-deploy.
+
+name: Build millingo — Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Production release tag (e.g. v1.0.0). Defaults to 'latest'."
+        required: false
+        default: "latest"
+        type: string
+
+jobs:
+  build:
+    name: Build svasamm/millingo (Production)
+    uses: ./.github/workflows/build-custom-image.yml
+    with:
+      image_name: millingo
+      frappe_branch: version-16
+      image_tag_prefix: ${{ github.event.inputs.version || 'latest' }}
+      floating_tag: latest
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      APPS_JSON_BASE64: ${{ secrets.MILLINGO_APPS_JSON_BASE64 }}
+
+  deploy:
+    name: Deploy to Production bench
+    needs: build
+    runs-on: ubuntu-latest
+    if: vars.DOKPLOY_DEPLOY_ENABLED == 'true'
+    environment: production
+
+    steps:
+      - name: Trigger Dokploy redeploy
+        env:
+          WEBHOOK_URL: ${{ secrets.DOKPLOY_MILLINGO_WEBHOOK }}
+          IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+        run: |
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "DOKPLOY_MILLINGO_WEBHOOK not set — skipping deploy."
+            exit 0
+          fi
+          echo "Deploying to Production bench — image: $IMAGE_TAG"
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "$WEBHOOK_URL" -H "Content-Type: application/json")
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "Deploy triggered (HTTP $HTTP_STATUS)"
+          else
+            echo "Webhook returned HTTP $HTTP_STATUS"; exit 1
+          fi

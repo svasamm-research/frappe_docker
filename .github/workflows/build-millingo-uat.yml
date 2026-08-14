@@ -1,0 +1,94 @@
+# UAT build for the Millingo (rice-mill ERP) image.
+#
+# TRIGGER: workflow_dispatch only.
+#   - Called automatically by the millingo repo when a Release tagged uat-vX.Y.Z is published
+#     (via millingo/.github/workflows/trigger-image-build.yml).
+#   - Can also be triggered manually (e.g. after infra changes on svasamm/base).
+#
+# Flow:
+#   millingo: create Release tagged uat-v1.0.0
+#     → trigger-image-build.yml dispatches this workflow with version=uat-v1.0.0
+#       → builds svasamm/millingo:uat-v1.0.0 + :uat-v1.0.0-{sha7} + :uat-latest
+#         (apps cloned from the `uat` branch)
+#           → deploys to the UAT bench via the Dokploy webhook
+#
+# Use CUSTOM_TAG=uat-latest in the Dokploy env — no config change per release.
+#
+# VERSION PINNING (apps/millingo-uat.json): Frappe via `frappe_branch: version-16`
+#    (latest v16 tip — SAFE now that TD-001, the sidebar plan-gating, is fixed);
+#    erpnext v16.21.0 + hrms v16.7.1 (the proven Lucoze-estate combo).
+#    ⚠️ india-compliance is on `version-16` (latest, to pair with the latest ERPNext)
+#    because the exact compatible release tag couldn't be confirmed offline — after the
+#    FIRST successful build, read the resolved india_compliance version from the build
+#    log and PIN it to that tag (the estate rule is release tags, not branches).
+#    After any `bench update`: update apps/millingo-uat.json, re-encode
+#    MILLINGO_UAT_APPS_JSON_BASE64, trigger a new build.
+#
+# Required GitHub Secrets:
+#   DOCKERHUB_USERNAME             Docker Hub username
+#   DOCKERHUB_TOKEN                Docker Hub token (read+write)
+#   MILLINGO_UAT_APPS_JSON_BASE64  base64 of apps/millingo-uat.json with HTTPS+PAT URLs
+#                                  (millingo pointing to the `uat` branch)
+#   DOKPLOY_MILLINGO_UAT_WEBHOOK   Dokploy deploy webhook for the UAT bench
+#
+# Required GitHub Variables:
+#   DOKPLOY_DEPLOY_ENABLED         set to "true" to enable auto-deploy after build
+
+name: Build millingo — UAT
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "UAT release tag (e.g. uat-v1.0.0). Defaults to 'uat-latest' for infra-triggered builds."
+        required: false
+        default: "uat-latest"
+        type: string
+
+jobs:
+  build:
+    name: Build svasamm/millingo (UAT)
+    uses: ./.github/workflows/build-custom-image.yml
+    with:
+      image_name: millingo
+      frappe_branch: version-16
+      image_tag_prefix: ${{ github.event.inputs.version || 'uat-latest' }}
+      floating_tag: uat-latest
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      APPS_JSON_BASE64: ${{ secrets.MILLINGO_UAT_APPS_JSON_BASE64 }}
+
+  deploy:
+    name: Deploy to UAT bench
+    needs: build
+    runs-on: ubuntu-latest
+    if: vars.DOKPLOY_DEPLOY_ENABLED == 'true'
+    environment: uat
+
+    steps:
+      - name: Trigger Dokploy redeploy
+        env:
+          WEBHOOK_URL: ${{ secrets.DOKPLOY_MILLINGO_UAT_WEBHOOK }}
+          IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+        run: |
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "DOKPLOY_MILLINGO_UAT_WEBHOOK not set — skipping deploy."
+            exit 0
+          fi
+          echo "Deploying to UAT bench — image: $IMAGE_TAG"
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "$WEBHOOK_URL" -H "Content-Type: application/json")
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 300 ]; then
+            echo "Deploy triggered (HTTP $HTTP_STATUS)"
+          else
+            echo "Webhook returned HTTP $HTTP_STATUS"; exit 1
+          fi
+
+      - name: Deploy summary
+        if: always()
+        run: |
+          echo "### UAT Deploy" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Version**: \`${{ github.event.inputs.version || 'uat-latest' }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Image**: \`${{ needs.build.outputs.image_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Bench**: millingo UAT (Hetzner)" >> "$GITHUB_STEP_SUMMARY"
