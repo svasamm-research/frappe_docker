@@ -4,13 +4,12 @@
 #   vX.Y.Z (no `uat-` prefix) is published. Builds svasamm/millingo:vX.Y.Z +
 #   :vX.Y.Z-{sha7} + :latest, apps cloned from `main`, then deploys via Dokploy webhook.
 #
-# ⚠️ TD-001: resolve the sidebar plan-gating (Frappe > 16.17.5) before production — see
-#    build-millingo-uat.yml header.
+# AUTH: App-mode (same as dms/UAT) — the reusable workflow injects a short-lived SVASAMM
+#   GitHub App token into the committed apps/millingo.json at build time. No base64 secret.
 #
-# Required GitHub Secrets: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN,
-#   MILLINGO_APPS_JSON_BASE64 (base64 of apps/millingo.json, HTTPS+PAT, `main` branch),
-#   DOKPLOY_MILLINGO_WEBHOOK.
-# Required GitHub Variables: DOKPLOY_DEPLOY_ENABLED = "true" to auto-deploy.
+# Required GitHub Secrets (org-level): DOCKERHUB_USERNAME, DOCKERHUB_TOKEN,
+#   SVASAMM_APP_PRIVATE_KEY. Per-tenant: DOKPLOY_MILLINGO_WEBHOOK.
+# Required GitHub Variables (org-level): SVASAMM_APP_ID; DOKPLOY_DEPLOY_ENABLED = "true".
 
 name: Build millingo — Production
 
@@ -32,10 +31,12 @@ jobs:
       frappe_branch: version-16
       image_tag_prefix: ${{ github.event.inputs.version || 'latest' }}
       floating_tag: latest
+      app_id: ${{ vars.SVASAMM_APP_ID }}
+      apps_json_path: apps/millingo.json
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      APPS_JSON_BASE64: ${{ secrets.MILLINGO_APPS_JSON_BASE64 }}
+      GH_APP_PRIVATE_KEY: ${{ secrets.SVASAMM_APP_PRIVATE_KEY }}
 
   deploy:
     name: Deploy to Production bench

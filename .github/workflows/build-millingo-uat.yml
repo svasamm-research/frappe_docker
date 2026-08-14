@@ -21,17 +21,22 @@
 #    because the exact compatible release tag couldn't be confirmed offline — after the
 #    FIRST successful build, read the resolved india_compliance version from the build
 #    log and PIN it to that tag (the estate rule is release tags, not branches).
-#    After any `bench update`: update apps/millingo-uat.json, re-encode
-#    MILLINGO_UAT_APPS_JSON_BASE64, trigger a new build.
+#    After any `bench update`: update apps/millingo-uat.json and trigger a new build
+#    (App-mode reads the committed manifest — no base64 secret to re-encode).
 #
-# Required GitHub Secrets:
+# AUTH: App-mode (same as dms) — the reusable workflow mints a short-lived token from
+#    the SVASAMM GitHub App and injects it into the committed apps/millingo-uat.json
+#    URLs at build time. No per-tenant APPS_JSON_BASE64 secret.
+#
+# Required GitHub Secrets (all ORG-level, already set for the estate):
 #   DOCKERHUB_USERNAME             Docker Hub username
 #   DOCKERHUB_TOKEN                Docker Hub token (read+write)
-#   MILLINGO_UAT_APPS_JSON_BASE64  base64 of apps/millingo-uat.json with HTTPS+PAT URLs
-#                                  (millingo pointing to the `uat` branch)
+#   SVASAMM_APP_PRIVATE_KEY        PEM key of the SVASAMM GitHub App (App-mode clone auth)
+# Per-tenant secret (the ONLY one to set for Millingo):
 #   DOKPLOY_MILLINGO_UAT_WEBHOOK   Dokploy deploy webhook for the UAT bench
 #
-# Required GitHub Variables:
+# Required GitHub Variables (org-level):
+#   SVASAMM_APP_ID                 the SVASAMM GitHub App id
 #   DOKPLOY_DEPLOY_ENABLED         set to "true" to enable auto-deploy after build
 
 name: Build millingo — UAT
@@ -54,10 +59,12 @@ jobs:
       frappe_branch: version-16
       image_tag_prefix: ${{ github.event.inputs.version || 'uat-latest' }}
       floating_tag: uat-latest
+      app_id: ${{ vars.SVASAMM_APP_ID }}
+      apps_json_path: apps/millingo-uat.json
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-      APPS_JSON_BASE64: ${{ secrets.MILLINGO_UAT_APPS_JSON_BASE64 }}
+      GH_APP_PRIVATE_KEY: ${{ secrets.SVASAMM_APP_PRIVATE_KEY }}
 
   deploy:
     name: Deploy to UAT bench
