@@ -14,15 +14,16 @@
 #
 # Use CUSTOM_TAG=uat-latest in the Dokploy env — no config change per release.
 #
-# VERSION PINNING (apps/millingo-uat.json): Frappe via `frappe_branch: version-16`
-#    (latest v16 tip — SAFE now that TD-001, the sidebar plan-gating, is fixed);
-#    erpnext v16.21.0 + hrms v16.7.1 (the proven Lucoze-estate combo).
-#    ⚠️ india-compliance is on `version-16` (latest, to pair with the latest ERPNext)
-#    because the exact compatible release tag couldn't be confirmed offline — after the
-#    FIRST successful build, read the resolved india_compliance version from the build
-#    log and PIN it to that tag (the estate rule is release tags, not branches).
-#    After any `bench update`: update apps/millingo-uat.json and trigger a new build
-#    (App-mode reads the committed manifest — no base64 secret to re-encode).
+# VERSION PINNING — the PROVEN LOCAL COMBO (matches the dev/CI bench exactly; 322
+#    tests + UI + India-Compliance validated): Frappe `v16.17.5` (this frappe_branch)
+#    + ERPNext `v16.17.0` + HRMS `v16.6.1` + India Compliance `v16.4.0` (apps/millingo-uat.json).
+#    ⚠️ DO NOT bump casually. The earlier "Lucoze combo" (erpnext v16.21.0 + ic
+#    version-16) BROKE on the first UAT build — IC version-16 calls ERPNext's
+#    get_round_off_applicable_accounts() with 3 args but v16.21.0 has 2, failing every
+#    Stock Entry. IC couples tightly to ERPNext and Lucoze can't validate it (Lucoze
+#    ships no IC). Any bump = run the FULL suite with IC on the new combo BEFORE building.
+#    After a validated `bench update`: update apps/millingo-uat.json + this frappe_branch,
+#    then trigger a new build (App-mode reads the committed manifest — no base64 secret).
 #
 # AUTH: App-mode (same as dms) — the reusable workflow mints a short-lived token from
 #    the SVASAMM GitHub App and injects it into the committed apps/millingo-uat.json
@@ -56,7 +57,7 @@ jobs:
     uses: ./.github/workflows/build-custom-image.yml
     with:
       image_name: millingo
-      frappe_branch: version-16
+      frappe_branch: v16.17.5
       image_tag_prefix: ${{ github.event.inputs.version || 'uat-latest' }}
       floating_tag: uat-latest
       app_id: ${{ vars.SVASAMM_APP_ID }}
