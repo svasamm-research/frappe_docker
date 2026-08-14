@@ -15,7 +15,7 @@
 # Use CUSTOM_TAG=uat-latest in the Dokploy env — no config change per release.
 #
 # VERSION PINNING — the PROVEN LOCAL COMBO (matches the dev/CI bench exactly; 322
-#    tests + UI + India-Compliance validated): Frappe `v16.17.5` (this frappe_branch)
+#    tests + UI + India-Compliance validated): Frappe `v16.17.0` (this frappe_branch — v16.17.5 has no published frappe/build image; same minor, no API drift)
 #    + ERPNext `v16.17.0` + HRMS `v16.6.1` + India Compliance `v16.4.0` (apps/millingo-uat.json).
 #    ⚠️ DO NOT bump casually. The earlier "Lucoze combo" (erpnext v16.21.0 + ic
 #    version-16) BROKE on the first UAT build — IC version-16 calls ERPNext's
@@ -57,7 +57,7 @@ jobs:
     uses: ./.github/workflows/build-custom-image.yml
     with:
       image_name: millingo
-      frappe_branch: v16.17.5
+      frappe_branch: v16.17.0
       image_tag_prefix: ${{ github.event.inputs.version || 'uat-latest' }}
       floating_tag: uat-latest
       app_id: ${{ vars.SVASAMM_APP_ID }}
